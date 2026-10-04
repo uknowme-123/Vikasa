@@ -1,0 +1,1 @@
+reading_id,plant_id,session_id,timestamp,species,stress_type,health_label,label_evidence,red_raw,nir_raw,red_dark,nir_dark,red_reference,nir_reference,red_reflectance,nir_reflectance,ndvi,temperature_c,humidity_pct,soil_moisture_raw,soil_moisture_pct,ambient_light_raw,operator_id,notes
