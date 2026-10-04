@@ -103,12 +103,12 @@ export const EXPECTED_CSV_COLUMNS = [
 
 export type CSVColumn = (typeof EXPECTED_CSV_COLUMNS)[number]
 
-export function calculateNDVI(redReflectance: number | null | undefined, nirReflectance: number | null | undefined): number | null {
+export function calculateNDVI(redReflectance: number | null | undefined, nirReflectance: number | null | undefined): number | undefined {
   if (redReflectance === null || redReflectance === undefined || nirReflectance === null || nirReflectance === undefined) {
-    return null
+    return undefined
   }
   const sum = nirReflectance + redReflectance
-  if (sum === 0) return null
+  if (sum === 0) return undefined
   return (nirReflectance - redReflectance) / sum
 }
 

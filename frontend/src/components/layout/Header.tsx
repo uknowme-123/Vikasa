@@ -1,6 +1,7 @@
 import { Menu, Bell, Wifi, WifiOff, Settings, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '../ui/Button'
+import { ProviderSwitcher } from '../ui/ProviderSwitcher'
 
 interface HeaderProps {
   onMenuClick: () => void
@@ -45,6 +46,8 @@ export function Header({ onMenuClick, systemStatus }: HeaderProps) {
       <div className="flex-1" />
 
       <div className="flex items-center gap-4">
+        <ProviderSwitcher />
+
         {systemStatus && (
           <div className="hidden md:flex items-center gap-4 text-xs">
             <div className="flex items-center gap-1.5">

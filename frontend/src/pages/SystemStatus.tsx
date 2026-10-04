@@ -148,7 +148,7 @@ export function SystemStatus() {
         </div>
         <div className="flex items-center gap-3">
           <Badge variant="warning" className="demo-badge">Demo Mode</Badge>
-          <Button onClick={checkAll} loading={checking === 'all'} variant="primary">
+          <Button onClick={() => void checkAll()} loading={checking === 'all'} variant="primary">
             <RefreshCw className="h-4 w-4" /> Check All
           </Button>
         </div>
@@ -188,11 +188,10 @@ export function SystemStatus() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => checkComponent(component.id)}
+                    onClick={() => void checkComponent(component.id)}
                     loading={isChecking}
                     disabled={isChecking}
-                    aria-label={`Check ${component.name} status`}
-                  >
+                    aria-label={`Check ${component.name} status`}>
                     <RefreshCw className="h-4 w-4" />
                   </Button>
                 </div>

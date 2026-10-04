@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { getDataProvider } from '../services/api'
+import { getDataProvider, checkApiHealth } from '../services/api'
 import type { SensorReadingWithMeta, PlantSummary, SessionSummary, SystemStatus } from '../types/sensor'
 
 export function useReadings() {
@@ -36,6 +36,20 @@ export function useSystemStatus() {
     queryFn: () => provider.getSystemStatus(),
     refetchInterval: 30 * 1000,
     staleTime: 10 * 1000,
+  })
+}
+
+export function useApiHealth(apiBaseUrl: string | null) {
+  return useQuery({
+    queryKey: ['apiHealth', apiBaseUrl],
+    queryFn: () => {
+      if (!apiBaseUrl) return Promise.resolve(null)
+      return checkApiHealth(apiBaseUrl)
+    },
+    enabled: !!apiBaseUrl,
+    refetchInterval: 60 * 1000,
+    staleTime: 30 * 1000,
+    retry: 1,
   })
 }
 

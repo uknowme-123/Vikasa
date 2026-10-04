@@ -60,7 +60,7 @@ export function FileUpload({
       e.preventDefault()
       setDragActive(false)
       if (e.dataTransfer.files.length > 0) {
-        handleFiles(e.dataTransfer.files)
+        void handleFiles(e.dataTransfer.files)
       }
     },
     [handleFiles]
@@ -79,7 +79,7 @@ export function FileUpload({
   const handleInputChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files.length > 0) {
-        handleFiles(e.target.files)
+        void handleFiles(e.target.files)
       }
     },
     [handleFiles]

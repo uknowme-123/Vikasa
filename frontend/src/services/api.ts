@@ -1,5 +1,6 @@
 import type { SensorReading, SensorReadingWithMeta, CSVValidationResult, PlantSummary, SessionSummary, SystemStatus } from '../types/sensor'
 import * as demoData from './demoData'
+import { EXPECTED_CSV_COLUMNS } from '../types/sensor'
 
 export interface DataProvider {
   getReadings: () => Promise<SensorReadingWithMeta[]>
@@ -31,7 +32,7 @@ export const demoProvider: DataProvider = {
   },
 }
 
-function parseAndValidateCSV(text: string): CSVValidationResult {
+export function parseAndValidateCSV(text: string): CSVValidationResult {
   const lines = text.trim().split('\n')
   if (lines.length === 0) {
     return {
@@ -48,8 +49,6 @@ function parseAndValidateCSV(text: string): CSVValidationResult {
 
   const headerLine = lines[0]
   const columns = headerLine.split(',').map((c) => c.trim())
-
-  const { EXPECTED_CSV_COLUMNS } = require('../types/sensor')
 
   const missingColumns = EXPECTED_CSV_COLUMNS.filter((col) => !columns.includes(col))
   const extraColumns = columns.filter((col) => !EXPECTED_CSV_COLUMNS.includes(col))
@@ -134,6 +133,29 @@ export function setDataProvider(provider: DataProvider): void {
 
 export function getDataProvider(): DataProvider {
   return currentProvider
+}
+
+export async function checkApiHealth(baseUrl: string): Promise<SystemStatus> {
+  const apiBase = baseUrl.replace(/\/$/, '')
+  try {
+    const response = await fetch(`${apiBase}/api/health`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (response.ok) {
+      const data = await response.json()
+      return {
+        api: 'connected',
+        esp32: data.esp32 ?? 'unknown',
+        firebase: data.firebase ?? 'unknown',
+        lastSync: data.lastSync ?? new Date().toISOString(),
+      }
+    }
+    return { api: 'disconnected', esp32: 'unknown', firebase: 'unknown', lastSync: null }
+  } catch {
+    return { api: 'disconnected', esp32: 'unknown', firebase: 'unknown', lastSync: null }
+  }
 }
 
 export async function createFlaskProvider(baseUrl: string): Promise<DataProvider> {

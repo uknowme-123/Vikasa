@@ -6,7 +6,8 @@ import { Badge } from '../components/ui/Badge'
 import { AlertBanner } from '../components/ui/AlertBanner'
 import { Button } from '../components/ui/Button'
 import type { CSVValidationResult, SensorReadingWithMeta } from '../types/sensor'
-import { Upload, Database, Table as TableIcon, AlertTriangle, CheckCircle, FileText, Eye } from 'lucide-react'
+import { Upload, Database, Table as TableIcon, AlertTriangle, CheckCircle, FileText, Eye, X } from 'lucide-react'
+import { parseAndValidateCSV } from '../services/api'
 
 const DATA_SET_TYPES = [
   { id: 'environmental', label: 'Environmental Data', description: 'Temperature, humidity, soil moisture, ambient light', icon: Database },
@@ -282,124 +283,4 @@ export function DataManagement() {
       </Card>
     </div>
   )
-}
-
-function parseAndValidateCSV(text: string): CSVValidationResult {
-  const lines = text.trim().split('\n')
-  if (lines.length === 0) {
-    return {
-      valid: false,
-      rowCount: 0,
-      columns: [],
-      missingColumns: [],
-      extraColumns: [],
-      warnings: ['Empty file'],
-      errors: ['No data found'],
-      preview: [],
-    }
-  }
-
-  const headerLine = lines[0]
-  const columns = headerLine.split(',').map((c) => c.trim())
-
-  const EXPECTED_CSV_COLUMNS = [
-    'reading_id',
-    'plant_id',
-    'session_id',
-    'timestamp',
-    'species',
-    'stress_type',
-    'health_label',
-    'label_evidence',
-    'red_raw',
-    'nir_raw',
-    'red_dark',
-    'nir_dark',
-    'red_reference',
-    'nir_reference',
-    'red_reflectance',
-    'nir_reflectance',
-    'ndvi',
-    'temperature_c',
-    'humidity_pct',
-    'soil_moisture_raw',
-    'soil_moisture_pct',
-    'ambient_light_raw',
-    'operator_id',
-    'notes',
-  ] as const
-
-  const missingColumns = EXPECTED_CSV_COLUMNS.filter((col) => !columns.includes(col))
-  const extraColumns = columns.filter((col) => !EXPECTED_CSV_COLUMNS.includes(col))
-
-  const warnings: string[] = []
-  const errors: string[] = []
-
-  if (missingColumns.length > 0) {
-    errors.push(`Missing required columns: ${missingColumns.join(', ')}`)
-  }
-
-  if (extraColumns.length > 0) {
-    warnings.push(`Extra columns detected: ${extraColumns.join(', ')}`)
-  }
-
-  const preview: SensorReadingWithMeta[] = []
-  const dataLines = lines.slice(1, 6)
-
-  dataLines.forEach((line, index) => {
-    const values = line.split(',').map((v) => v.trim())
-    const row: Record<string, string> = {}
-    columns.forEach((col, i) => {
-      row[col] = values[i] ?? ''
-    })
-
-    const reading: SensorReadingWithMeta = {
-      reading_id: row.reading_id || `ROW-${index + 1}`,
-      plant_id: row.plant_id || 'UNKNOWN',
-      session_id: row.session_id || 'UNKNOWN',
-      timestamp: row.timestamp || new Date().toISOString(),
-      species: row.species || undefined,
-      stress_type: row.stress_type || undefined,
-      health_label: row.health_label || undefined,
-      label_evidence: row.label_evidence || undefined,
-      red_raw: row.red_raw ? parseInt(row.red_raw, 10) : undefined,
-      nir_raw: row.nir_raw ? parseInt(row.nir_raw, 10) : undefined,
-      red_dark: row.red_dark ? parseInt(row.red_dark, 10) : undefined,
-      nir_dark: row.nir_dark ? parseInt(row.nir_dark, 10) : undefined,
-      red_reference: row.red_reference ? parseInt(row.red_reference, 10) : undefined,
-      nir_reference: row.nir_reference ? parseInt(row.nir_reference, 10) : undefined,
-      red_reflectance: row.red_reflectance ? parseFloat(row.red_reflectance) : undefined,
-      nir_reflectance: row.nir_reflectance ? parseFloat(row.nir_reflectance) : undefined,
-      ndvi: row.ndvi ? parseFloat(row.ndvi) : undefined,
-      temperature_c: row.temperature_c ? parseFloat(row.temperature_c) : undefined,
-      humidity_pct: row.humidity_pct ? parseFloat(row.humidity_pct) : undefined,
-      soil_moisture_raw: row.soil_moisture_raw ? parseInt(row.soil_moisture_raw, 10) : undefined,
-      soil_moisture_pct: row.soil_moisture_pct ? parseFloat(row.soil_moisture_pct) : undefined,
-      ambient_light_raw: row.ambient_light_raw ? parseInt(row.ambient_light_raw, 10) : undefined,
-      operator_id: row.operator_id || 'CSV-IMPORT',
-      notes: row.notes || undefined,
-      _meta: {
-        source: 'csv',
-        rowIndex: index + 1,
-        validationWarnings: [
-          'CSV import - validate calibration before use',
-          ...(row.red_reflectance || row.nir_reflectance ? [] : ['Calibrated reflectance missing']),
-        ],
-      },
-    }
-    preview.push(reading)
-  })
-
-  const rowCount = lines.length - 1
-
-  return {
-    valid: errors.length === 0,
-    rowCount,
-    columns,
-    missingColumns,
-    extraColumns,
-    warnings,
-    errors,
-    preview,
-  }
 }
