@@ -1,6 +1,6 @@
 # Vikāsa Frontend Dashboard
 
-React + TypeScript + Vite frontend for the Vikāsa plant stress monitoring system.
+React + TypeScript + Vite frontend for the Vikāsa plant stress monitoring system. The dashboard is a presentation layer for the proposed architecture; it does not claim that hardware, Firebase, or an ML model is connected.
 
 ## Quick Start
 
@@ -59,23 +59,23 @@ frontend/
 └── postcss.config.js
 ```
 
-## Key Features
+## Dashboard pages
 
 ### Pages
 - **Overview** — Environmental sensor cards, plant status summaries, trend charts
 - **Plant Monitoring** — Plant/session selection, measurement history tables
 - **Optical Sensing** — Red/NIR raw & calibrated reflectance, NDVI, comparison charts
-- **Trends** — Historical time-series for environmental & optical data
-- **Alerts** — Threshold alerts, connectivity warnings, calibration notices
-- **Data Management** — CSV upload/validation with schema checking, dataset separation
-- **System Status** — API, ESP32, Firebase, Telegram connectivity simulation
+- **Sensor History** — Timestamped reading table
+- **Alerts** — Calibration and operational notices
+- **Dataset / CSV Inspector** — Browser-local CSV structure inspection with provenance warnings
+- **System Status** — Explicit API, ESP32, and Firebase readiness states
 
-### Data Architecture
-- **Typed interfaces** (`types/sensor.ts`) match the CSV schema exactly
-- **Zod validation** for runtime CSV parsing
-- **Data provider layer** (`services/api.ts`) — swap demo for Flask API without UI changes
-- **TanStack Query** for caching, stale-while-revalidate, background refetching
-- **Demo data** clearly labeled with badges and warnings
+### Data architecture
+- **Typed interfaces** (`src/types/sensor.ts`) mirror the backend sensor schema.
+- **Zod validation** protects CSV inspection and keeps unavailable values undefined.
+- **Data provider layer** (`src/services/api.ts`) separates demo data from future Flask API access.
+- **TanStack Query** handles loading and retry states.
+- **Demo data** is always labeled and never presented as a hardware measurement.
 
 ### Data Integrity Rules (Enforced)
 - Calibrated fields (`red_reflectance`, `nir_reflectance`, `ndvi`, `soil_moisture_pct`) are `number | null` — **never default to 0**
@@ -86,13 +86,13 @@ frontend/
 
 ## Switching to Flask API
 
-When the backend is ready, replace the data provider in `main.tsx` or `App.tsx`:
+The frontend selects a live provider when `VITE_API_BASE_URL` is set. Otherwise it uses the clearly labeled demo provider:
 
 ```tsx
 import { createFlaskProvider, setDataProvider } from './services/api'
 
 // After user login or config
-const flaskProvider = await createFlaskProvider('http://localhost:5000')
+const flaskProvider = createFlaskProvider(import.meta.env.VITE_API_BASE_URL)
 setDataProvider(flaskProvider)
 ```
 
@@ -116,11 +116,19 @@ Modern browsers (last 2 versions):
 
 ## Environment Variables
 
-None required for demo mode. For Flask API integration:
+None required for demo mode. For future Flask API integration:
 
 ```env
 VITE_API_BASE_URL=http://localhost:5000
 ```
+
+The current Flask backend exposes sensor ingestion and storage routes, but the dashboard summary endpoints are still a separate integration task. A configured API provider may therefore require matching backend routes before live data appears.
+
+## CSV inspection and integrity
+
+The Dataset / CSV Inspector reads a selected file in the browser and reports file columns, row count, missing cells, schema gaps, and provenance warnings. It does not merge CSV rows into demo/API readings. The repository CSV template contains headers only.
+
+Raw red/NIR ADC counts are displayed separately from calibrated reflectance. NDVI is shown only when both calibrated reflectance values are present; it is never calculated from raw ADC counts.
 
 ## License
 

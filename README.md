@@ -121,6 +121,7 @@ This repository currently contains the proposed project structure and documentat
 - [docs/data_collection_protocol.md](docs/data_collection_protocol.md)
 - [docs/ml_workflow.md](docs/ml_workflow.md)
 - [docs/api_documentation.md](docs/api_documentation.md)
+- [docs/firebase_setup.md](docs/firebase_setup.md)
 
 ## Notes
 

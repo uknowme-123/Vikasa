@@ -46,3 +46,7 @@ __pycache__/
 firebase-credentials.json
 service-account*.json
 *firebase*credentials*.json
+
+# Local Firebase emulator/runtime files
+.firebase/
+firebase-debug.log

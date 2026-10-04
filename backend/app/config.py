@@ -24,6 +24,7 @@ class Config:
     firebase_project_id: Optional[str] = None
     firebase_credentials_path: Optional[str] = None
     firebase_database_url: Optional[str] = None
+    firebase_timeout_seconds: float = 10.0
 
     # Logging
     log_level: str = "INFO"
@@ -43,6 +44,7 @@ class Config:
             firebase_project_id=os.getenv("FIREBASE_PROJECT_ID"),
             firebase_credentials_path=os.getenv("FIREBASE_CREDENTIALS_PATH"),
             firebase_database_url=os.getenv("FIREBASE_DATABASE_URL"),
+            firebase_timeout_seconds=float(os.getenv("FIREBASE_TIMEOUT_SECONDS", "10")),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             reading_id_pattern=os.getenv("READING_ID_PATTERN", r"^[A-Z0-9-]{1,64}$"),
         )
@@ -59,12 +61,12 @@ class Config:
 
         if not self.firebase_project_id:
             errors.append("FIREBASE_PROJECT_ID is required when STORAGE_BACKEND=firebase")
-        if not self.firebase_credentials_path:
-            errors.append("FIREBASE_CREDENTIALS_PATH is required when STORAGE_BACKEND=firebase")
-        elif not os.path.exists(self.firebase_credentials_path):
+        if self.firebase_credentials_path and not os.path.exists(self.firebase_credentials_path):
             errors.append(f"Firebase credentials file not found: {self.firebase_credentials_path}")
         if not self.firebase_database_url:
             errors.append("FIREBASE_DATABASE_URL is required when STORAGE_BACKEND=firebase")
+        if self.firebase_timeout_seconds <= 0:
+            errors.append("FIREBASE_TIMEOUT_SECONDS must be greater than zero")
 
         return errors
 

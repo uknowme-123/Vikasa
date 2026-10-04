@@ -1,4 +1,4 @@
-import { HTMLAttributes, forwardRef } from 'react'
+import { forwardRef, type HTMLAttributes } from 'react'
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   variant?: 'success' | 'warning' | 'danger' | 'info' | 'neutral'

@@ -1,4 +1,4 @@
-import { HTMLAttributes, forwardRef } from 'react'
+import { forwardRef, type HTMLAttributes } from 'react'
 import { X, AlertCircle, CheckCircle, Info, AlertTriangle } from 'lucide-react'
 
 interface AlertBannerProps extends HTMLAttributes<HTMLDivElement> {

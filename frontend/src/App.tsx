@@ -1,27 +1,28 @@
 import { Routes, Route } from 'react-router-dom'
 import { Layout } from './components/layout/Layout'
-import { Overview } from './pages/Overview'
-import { PlantMonitoring } from './pages/PlantMonitoring'
-import { OpticalSensing } from './pages/OpticalSensing'
-import { Trends } from './pages/Trends'
-import { Alerts } from './pages/Alerts'
-import { DataManagement } from './pages/DataManagement'
-import { SystemStatus } from './pages/SystemStatus'
+import {
+  Alerts,
+  DatasetInspector,
+  OpticalSensing,
+  Overview,
+  PlantMonitoring,
+  SensorHistory,
+  SystemStatusPage,
+} from './pages/DashboardPages'
 
-function App() {
+export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Overview />} />
         <Route path="/plants" element={<PlantMonitoring />} />
         <Route path="/optical" element={<OpticalSensing />} />
-        <Route path="/trends" element={<Trends />} />
+        <Route path="/history" element={<SensorHistory />} />
+        <Route path="/trends" element={<SensorHistory />} />
         <Route path="/alerts" element={<Alerts />} />
-        <Route path="/data" element={<DataManagement />} />
-        <Route path="/status" element={<SystemStatus />} />
+        <Route path="/data" element={<DatasetInspector />} />
+        <Route path="/status" element={<SystemStatusPage />} />
       </Route>
     </Routes>
   )
 }
-
-export default App

@@ -1,6 +1,5 @@
 """Vikāsa Flask application factory."""
 
-import os
 from flask import Flask
 from flask_cors import CORS
 
@@ -8,6 +7,7 @@ from backend.app.config import config
 from backend.app.utils.logging import setup_logging
 from backend.app.utils.errors import register_error_handlers
 from backend.app.routes.health import register_health_routes
+from backend.app.routes.operations import register_operations_routes
 from backend.app.routes.sensor_data import register_sensor_routes
 
 
@@ -51,6 +51,7 @@ def create_app() -> Flask:
                 logger.info(f"Storage backend initialized: {config.storage_backend}")
             except Exception as e:
                 logger.error(f"Storage initialization failed: {e}")
+                raise
 
     @app.teardown_appcontext
     def close_storage(exception=None):
@@ -60,6 +61,7 @@ def create_app() -> Flask:
     # Register routes
     app.register_blueprint(register_health_routes(storage))
     app.register_blueprint(register_sensor_routes(storage))
+    app.register_blueprint(register_operations_routes(storage))
 
     # Store storage instance for access in routes
     app.storage = storage

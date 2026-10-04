@@ -1,7 +1,7 @@
 """Request validation logic for Vikāsa sensor data API."""
 
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from backend.app.schemas.sensor import SensorReadingCreate
 from backend.app.utils.errors import ValidationError
@@ -48,17 +48,17 @@ def validate_sensor_reading(data: Dict[str, Any]) -> SensorReadingCreate:
         try:
             timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
             # Check timestamp is not too far in future (allow 5 min clock skew)
-            now = datetime.utcnow()
-            if timestamp > now.replace(tzinfo=None) + __import__("datetime").timedelta(minutes=5):
+            now = datetime.now(timestamp.tzinfo or timezone.utc)
+            if timestamp > now + timedelta(minutes=5):
                 raise ValidationError(
                     "Timestamp cannot be in the future",
                     details={"timestamp": timestamp_str, "max_allowed": now.isoformat()},
                 )
             # Check timestamp is not too old (1 year)
-            if timestamp < now.replace(tzinfo=None) - __import__("datetime").timedelta(days=365):
+            if timestamp < now - timedelta(days=365):
                 raise ValidationError(
                     "Timestamp is too old (more than 1 year)",
-                    details={"timestamp": timestamp_str, "min_allowed": (now - __import__("datetime").timedelta(days=365)).isoformat()},
+                    details={"timestamp": timestamp_str, "min_allowed": (now - timedelta(days=365)).isoformat()},
                 )
         except ValueError as e:
             if "Timestamp cannot" in str(e) or "Timestamp is too old" in str(e):
@@ -160,8 +160,13 @@ def validate_pagination_params(
 ) -> tuple[int, int, Optional[str], Optional[str], Optional[datetime], Optional[datetime]]:
     """Validate and normalize pagination parameters."""
     # Defaults
-    validated_page = max(1, page or 1)
-    validated_page_size = min(1000, max(1, page_size or 50))
+    if page is not None and page < 1:
+        raise ValidationError("page must be at least 1")
+    if page_size is not None and not 1 <= page_size <= 1000:
+        raise ValidationError("page_size must be between 1 and 1000")
+
+    validated_page = page or 1
+    validated_page_size = page_size or 50
 
     # Validate plant_id
     validated_plant_id = plant_id.strip() if plant_id else None

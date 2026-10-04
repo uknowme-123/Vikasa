@@ -2,7 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { getDataProvider, setDataProvider, createFlaskProvider, demoProvider } from './services/api'
+import { setDataProvider, createFlaskProvider, demoProvider } from './services/api'
 import App from './App'
 import './styles/index.css'
 
@@ -16,17 +16,16 @@ const queryClient = new QueryClient({
   },
 })
 
-async function initializeProvider() {
+function initializeProvider() {
   const savedUrl = localStorage.getItem('vikasa-api-url')
-  const demoMode = localStorage.getItem('vikasa-demo-mode')
   const envUrl = import.meta.env.VITE_API_BASE_URL
 
   // Priority: localStorage > env var > demo
   const apiUrl = savedUrl || envUrl
 
-  if (apiUrl && demoMode !== 'true') {
+  if (apiUrl) {
     try {
-      const provider = await createFlaskProvider(apiUrl)
+      const provider = createFlaskProvider(apiUrl)
       setDataProvider(provider)
     } catch {
       // Fall back to demo on error
@@ -37,14 +36,13 @@ async function initializeProvider() {
   }
 }
 
-initializeProvider().then(() => {
-  ReactDOM.createRoot(document.getElementById('root')!).render(
-    <React.StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </QueryClientProvider>
-    </React.StrictMode>,
-  )
-}).catch(console.error)
+initializeProvider()
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </QueryClientProvider>
+  </React.StrictMode>,
+)

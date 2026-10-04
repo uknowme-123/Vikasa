@@ -16,8 +16,9 @@ health_bp = Blueprint("health", __name__, url_prefix="/api")
 
 def register_health_routes(storage: StorageService) -> Blueprint:
     """Register health check routes with storage dependency."""
+    blueprint = Blueprint("health", __name__, url_prefix="/api")
 
-    @health_bp.route("/health", methods=["GET"])
+    @blueprint.route("/health", methods=["GET"])
     def health_check():
         """Health check endpoint."""
         correlation_id = get_correlation_id() or request.headers.get("X-Correlation-ID")
@@ -63,4 +64,4 @@ def register_health_routes(storage: StorageService) -> Blueprint:
         status_code = 200 if storage_stats.is_healthy else 503
         return response.model_dump(mode="json"), status_code
 
-    return health_bp
+    return blueprint

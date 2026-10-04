@@ -1,22 +1,10 @@
 import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
-import { Sidebar } from './Sidebar'
+import { useStatus } from '../../hooks/useSensorData'
 import { Header } from './Header'
-import { useSystemStatus } from '../../hooks/useSensorData'
-
+import { Sidebar } from './Sidebar'
 export function Layout() {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { data: systemStatus } = useSystemStatus()
-
-  return (
-    <div className="min-h-screen bg-neutral-50">
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className="lg:pl-64">
-        <Header onMenuClick={() => setSidebarOpen(true)} systemStatus={systemStatus ?? { api: 'unknown', esp32: 'unknown', firebase: 'unknown' }} />
-        <main className="p-4 lg:p-6" role="main">
-          <Outlet />
-        </main>
-      </div>
-    </div>
-  )
+  const [open, setOpen] = useState(false)
+  const { data: status } = useStatus()
+  return <div className="min-h-screen bg-slate-50"><Sidebar isOpen={open} onClose={() => setOpen(false)} /><div className="lg:pl-72"><Header onMenuClick={() => setOpen(true)} status={status} /><main className="mx-auto max-w-[1600px] p-4 lg:p-8"><Outlet /></main></div></div>
 }

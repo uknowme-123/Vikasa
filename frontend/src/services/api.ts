@@ -1,196 +1,122 @@
-import type { SensorReading, SensorReadingWithMeta, CSVValidationResult, PlantSummary, SessionSummary, SystemStatus } from '../types/sensor'
-import * as demoData from './demoData'
-import { EXPECTED_CSV_COLUMNS } from '../types/sensor'
+import { EXPECTED_CSV_COLUMNS, SensorReadingSchema, type AlertItem, type CSVValidationResult, type PlantSummary, type SensorReadingWithMeta, type SystemStatus } from '../types/sensor'
+import * as demo from './demoData'
 
 export interface DataProvider {
-  getReadings: () => Promise<SensorReadingWithMeta[]>
-  getPlantSummaries: () => Promise<PlantSummary[]>
-  getSessionSummaries: () => Promise<SessionSummary[]>
-  getSystemStatus: () => Promise<SystemStatus>
-  getReadingsForPlant: (plantId: string) => SensorReadingWithMeta[]
-  getReadingsForSession: (sessionId: string) => SensorReadingWithMeta[]
-  validateCSV: (file: File) => Promise<CSVValidationResult>
+  mode: 'demo' | 'api'
+  getReadings(): Promise<SensorReadingWithMeta[]>
+  getPlantSummaries(): Promise<PlantSummary[]>
+  getSystemStatus(): Promise<SystemStatus>
+  getAlerts(): Promise<AlertItem[]>
+  validateCSV(file: File): Promise<CSVValidationResult>
+}
+
+function parseCSV(text: string): CSVValidationResult {
+  const lines = text.trim() ? text.trim().split(/\r?\n/) : []
+  const columns = lines[0]?.split(',').map((value) => value.trim()) ?? []
+  const missingColumns = EXPECTED_CSV_COLUMNS.filter((column) => !columns.includes(column))
+  const extraColumns = columns.filter((column) => !EXPECTED_CSV_COLUMNS.includes(column as never))
+  const missingValues: Record<string, number> = {}
+  const preview: SensorReadingWithMeta[] = []
+  const warnings: string[] = ['CSV data is kept separate from demo and hardware readings.', 'Review provenance and calibration before analysis.']
+  for (const column of columns) missingValues[column] = 0
+  lines.slice(1).forEach((line, index) => {
+    const values = line.split(',')
+    const row: Record<string, string> = {}
+    columns.forEach((column, columnIndex) => {
+      row[column] = values[columnIndex]?.trim() ?? ''
+      if (!row[column]) missingValues[column] = (missingValues[column] ?? 0) + 1
+    })
+    const parsed = SensorReadingSchema.safeParse({
+      ...row,
+      red_raw: row.red_raw ? Number(row.red_raw) : undefined,
+      nir_raw: row.nir_raw ? Number(row.nir_raw) : undefined,
+      red_reflectance: row.red_reflectance ? Number(row.red_reflectance) : undefined,
+      nir_reflectance: row.nir_reflectance ? Number(row.nir_reflectance) : undefined,
+      ndvi: row.ndvi ? Number(row.ndvi) : undefined,
+      temperature_c: row.temperature_c ? Number(row.temperature_c) : undefined,
+      humidity_pct: row.humidity_pct ? Number(row.humidity_pct) : undefined,
+      soil_moisture_pct: row.soil_moisture_pct ? Number(row.soil_moisture_pct) : undefined,
+      soil_moisture_raw: row.soil_moisture_raw ? Number(row.soil_moisture_raw) : undefined,
+      ambient_light_raw: row.ambient_light_raw ? Number(row.ambient_light_raw) : undefined,
+    })
+    if (parsed.success && preview.length < 5) preview.push({ ...parsed.data, _meta: { source: 'csv', rowIndex: index + 1, validationWarnings: ['CSV provenance requires review'] } })
+  })
+  const errors = missingColumns.length ? [`Missing columns: ${missingColumns.join(', ')}`] : []
+  return { valid: errors.length === 0, rowCount: Math.max(0, lines.length - 1), columns, missingColumns, extraColumns, missingValues, warnings, errors, preview }
 }
 
 export const demoProvider: DataProvider = {
-  getReadings: demoData.fetchDemoReadings,
-  getPlantSummaries: demoData.fetchDemoPlantSummaries,
-  getSessionSummaries: demoData.fetchDemoSessionSummaries,
-  getSystemStatus: demoData.fetchDemoSystemStatus,
-  getReadingsForPlant: demoData.getReadingsForPlant,
-  getReadingsForSession: demoData.getReadingsForSession,
-  validateCSV: async (file: File) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const text = e.target?.result as string
-        const result = parseAndValidateCSV(text)
-        resolve(result)
-      }
-      reader.readAsText(file)
-    })
-  },
+  mode: 'demo',
+  getReadings: demo.fetchDemoReadings,
+  getPlantSummaries: demo.fetchDemoPlantSummaries,
+  getSystemStatus: demo.fetchDemoStatus,
+  getAlerts: demo.fetchDemoAlerts,
+  validateCSV: async (file) => parseCSV(await file.text()),
 }
 
-export function parseAndValidateCSV(text: string): CSVValidationResult {
-  const lines = text.trim().split('\n')
-  if (lines.length === 0) {
+export function createFlaskProvider(baseUrl: string): DataProvider {
+  const api = baseUrl.replace(/\/$/, '')
+  async function get<T>(path: string): Promise<T> {
+    const response = await fetch(`${api}${path}`)
+    if (!response.ok) throw new Error(`API request failed: ${response.status}`)
+    const body: unknown = await response.json()
+    if (typeof body === 'object' && body !== null && 'data' in body) {
+      return (body as { data: T }).data
+    }
+    return body as T
+  }
+  async function getReadings(): Promise<SensorReadingWithMeta[]> {
+    const body = await get<unknown>('/api/readings')
+    if (Array.isArray(body)) return body as SensorReadingWithMeta[]
+    if (typeof body === 'object' && body !== null && 'items' in body) {
+      return (body as { items: SensorReadingWithMeta[] }).items
+    }
+    throw new Error('API returned an unsupported readings response')
+  }
+  async function getPlantSummaries(): Promise<PlantSummary[]> {
+    const summaries = await get<Array<{
+      plant_id: string
+      species: string | null
+      latest_timestamp: string | null
+      health_label: string | null
+      reading_count: number
+    }>>('/api/plants/summaries')
+    return summaries.map((summary) => ({
+      plant_id: summary.plant_id,
+      species: summary.species,
+      latestReading: null,
+      readingCount: summary.reading_count,
+      healthLabel: summary.health_label,
+      lastUpdated: summary.latest_timestamp,
+    }))
+  }
+  async function getSystemStatus(): Promise<SystemStatus> {
+    const status = await get<{
+      api: SystemStatus['api']
+      esp32: SystemStatus['esp32']
+      firebase: SystemStatus['firebase']
+      last_sync: string | null
+    }>('/api/system/status')
     return {
-      valid: false,
-      rowCount: 0,
-      columns: [],
-      missingColumns: [],
-      extraColumns: [],
-      warnings: ['Empty file'],
-      errors: ['No data found'],
-      preview: [],
+      api: status.api,
+      esp32: status.esp32,
+      firebase: status.firebase,
+      lastSync: status.last_sync,
     }
   }
-
-  const headerLine = lines[0]
-  const columns = headerLine.split(',').map((c) => c.trim())
-
-  const missingColumns = EXPECTED_CSV_COLUMNS.filter((col) => !columns.includes(col))
-  const extraColumns = columns.filter((col) => !EXPECTED_CSV_COLUMNS.includes(col))
-
-  const warnings: string[] = []
-  const errors: string[] = []
-
-  if (missingColumns.length > 0) {
-    errors.push(`Missing required columns: ${missingColumns.join(', ')}`)
+  async function getAlerts(): Promise<AlertItem[]> {
+    const body = await get<{ alerts: AlertItem[] }>('/api/alerts')
+    return body.alerts
   }
-
-  if (extraColumns.length > 0) {
-    warnings.push(`Extra columns detected: ${extraColumns.join(', ')}`)
-  }
-
-  const preview: SensorReadingWithMeta[] = []
-  const dataLines = lines.slice(1, 6)
-
-  dataLines.forEach((line, index) => {
-    const values = line.split(',').map((v) => v.trim())
-    const row: Record<string, string> = {}
-    columns.forEach((col, i) => {
-      row[col] = values[i] ?? ''
-    })
-
-    const reading: SensorReadingWithMeta = {
-      reading_id: row.reading_id || `ROW-${index + 1}`,
-      plant_id: row.plant_id || 'UNKNOWN',
-      session_id: row.session_id || 'UNKNOWN',
-      timestamp: row.timestamp || new Date().toISOString(),
-      species: row.species || undefined,
-      stress_type: row.stress_type || undefined,
-      health_label: row.health_label || undefined,
-      label_evidence: row.label_evidence || undefined,
-      red_raw: row.red_raw ? parseInt(row.red_raw, 10) : undefined,
-      nir_raw: row.nir_raw ? parseInt(row.nir_raw, 10) : undefined,
-      red_dark: row.red_dark ? parseInt(row.red_dark, 10) : undefined,
-      nir_dark: row.nir_dark ? parseInt(row.nir_dark, 10) : undefined,
-      red_reference: row.red_reference ? parseInt(row.red_reference, 10) : undefined,
-      nir_reference: row.nir_reference ? parseInt(row.nir_reference, 10) : undefined,
-      red_reflectance: row.red_reflectance ? parseFloat(row.red_reflectance) : undefined,
-      nir_reflectance: row.nir_reflectance ? parseFloat(row.nir_reflectance) : undefined,
-      ndvi: row.ndvi ? parseFloat(row.ndvi) : undefined,
-      temperature_c: row.temperature_c ? parseFloat(row.temperature_c) : undefined,
-      humidity_pct: row.humidity_pct ? parseFloat(row.humidity_pct) : undefined,
-      soil_moisture_raw: row.soil_moisture_raw ? parseInt(row.soil_moisture_raw, 10) : undefined,
-      soil_moisture_pct: row.soil_moisture_pct ? parseFloat(row.soil_moisture_pct) : undefined,
-      ambient_light_raw: row.ambient_light_raw ? parseInt(row.ambient_light_raw, 10) : undefined,
-      operator_id: row.operator_id || 'CSV-IMPORT',
-      notes: row.notes || undefined,
-      _meta: {
-        source: 'csv',
-        rowIndex: index + 1,
-        validationWarnings: [
-          'CSV import - validate calibration before use',
-          ...(row.red_reflectance || row.nir_reflectance ? [] : ['Calibrated reflectance missing']),
-        ],
-      },
-    }
-    preview.push(reading)
-  })
-
-  const rowCount = lines.length - 1
-
   return {
-    valid: errors.length === 0,
-    rowCount,
-    columns,
-    missingColumns,
-    extraColumns,
-    warnings,
-    errors,
-    preview,
+    mode: 'api',
+    getReadings,
+    getPlantSummaries,
+    getSystemStatus,
+    getAlerts,
+    validateCSV: async (file) => parseCSV(await file.text()),
   }
 }
-
-let currentProvider: DataProvider = demoProvider
-
-export function setDataProvider(provider: DataProvider): void {
-  currentProvider = provider
-}
-
-export function getDataProvider(): DataProvider {
-  return currentProvider
-}
-
-export async function checkApiHealth(baseUrl: string): Promise<SystemStatus> {
-  const apiBase = baseUrl.replace(/\/$/, '')
-  try {
-    const response = await fetch(`${apiBase}/api/health`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(5000),
-    })
-    if (response.ok) {
-      const data = await response.json()
-      return {
-        api: 'connected',
-        esp32: data.esp32 ?? 'unknown',
-        firebase: data.firebase ?? 'unknown',
-        lastSync: data.lastSync ?? new Date().toISOString(),
-      }
-    }
-    return { api: 'disconnected', esp32: 'unknown', firebase: 'unknown', lastSync: null }
-  } catch {
-    return { api: 'disconnected', esp32: 'unknown', firebase: 'unknown', lastSync: null }
-  }
-}
-
-export async function createFlaskProvider(baseUrl: string): Promise<DataProvider> {
-  const apiBase = baseUrl.replace(/\/$/, '')
-
-  async function fetchJSON<T>(endpoint: string): Promise<T> {
-    const response = await fetch(`${apiBase}${endpoint}`)
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status} ${response.statusText}`)
-    }
-    return response.json()
-  }
-
-  return {
-    getReadings: () => fetchJSON<SensorReadingWithMeta[]>('/api/readings'),
-    getPlantSummaries: () => fetchJSON<PlantSummary[]>('/api/plants/summaries'),
-    getSessionSummaries: () => fetchJSON<SessionSummary[]>('/api/sessions/summaries'),
-    getSystemStatus: () => fetchJSON<SystemStatus>('/api/system/status'),
-    getReadingsForPlant: (plantId: string) => {
-      throw new Error('Use getReadings and filter client-side, or implement dedicated endpoint')
-    },
-    getReadingsForSession: (sessionId: string) => {
-      throw new Error('Use getReadings and filter client-side, or implement dedicated endpoint')
-    },
-    validateCSV: async (file: File) => {
-      const formData = new FormData()
-      formData.append('file', file)
-      const response = await fetch(`${apiBase}/api/data/validate-csv`, {
-        method: 'POST',
-        body: formData,
-      })
-      if (!response.ok) {
-        throw new Error(`CSV validation failed: ${response.status}`)
-      }
-      return response.json()
-    },
-  }
-}
+let provider: DataProvider = demoProvider
+export const setDataProvider = (next: DataProvider) => { provider = next }
+export const getDataProvider = () => provider
