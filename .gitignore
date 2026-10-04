@@ -33,3 +33,16 @@ coverage/
 # Misc
 *.tmp
 *.temp
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.db
+*.sqlite
+
+# Firebase credentials (never commit)
+firebase-credentials.json
+service-account*.json
+*firebase*credentials*.json
