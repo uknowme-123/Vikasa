@@ -88,6 +88,58 @@ class FirebaseStorage(StorageService):
         self._initialized = False
         logger.info("Firebase storage closed")
 
+    async def smoke_test(self) -> bool:
+        """
+        Perform a Firebase connectivity smoke test by writing a test record.
+        
+        This should only be called explicitly when FIREBASE_SMOKE_TEST=true is set.
+        The test record is marked with test_only: true to be unmistakably identifiable.
+        
+        Returns:
+            True if smoke test passes, False otherwise.
+        """
+        if not self._config.firebase_smoke_test:
+            logger.info("Smoke test skipped: FIREBASE_SMOKE_TEST not enabled")
+            return False
+        
+        if not self._initialized or not self._ref:
+            logger.error("Cannot run smoke test: Firebase not initialized")
+            return False
+        
+        try:
+            ref = self._require_reference()
+            test_reading_id = f"SMOKE_TEST_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+            test_data = {
+                "reading_id": test_reading_id,
+                "plant_id": "SMOKE_TEST_PLANT",
+                "session_id": "SMOKE_TEST_SESSION",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "operator_id": "SMOKE_TEST_OPERATOR",
+                "test_only": True,
+                "notes": "FIREBASE SMOKE TEST - NOT A REAL READING",
+            }
+            
+            # Write test record
+            await self._run(lambda: ref.child(test_reading_id).set(test_data))
+            
+            # Verify we can read it back
+            data = await self._run(
+                lambda: ref.child(test_reading_id).get(timeout=self._config.firebase_timeout_seconds)
+            )
+            
+            if data and data.get("test_only") is True:
+                # Clean up test record
+                await self._run(lambda: ref.child(test_reading_id).delete())
+                logger.info("Firebase smoke test passed", extra={"test_reading_id": test_reading_id})
+                return True
+            else:
+                logger.error("Firebase smoke test failed: could not verify test record")
+                return False
+                
+        except Exception as e:
+            logger.error("Firebase smoke test failed", extra={"error": str(e)})
+            return False
+
     def _require_reference(self):
         if not self._initialized or self._ref is None:
             raise StorageFirebaseError("Firebase storage not initialized")

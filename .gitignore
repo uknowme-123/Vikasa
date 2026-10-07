@@ -50,3 +50,12 @@ service-account*.json
 # Local Firebase emulator/runtime files
 .firebase/
 firebase-debug.log
+
+# Firmware secrets and build outputs
+hardware/firmware/secrets.h
+hardware/firmware/.pio/
+hardware/firmware/build/
+
+# Local agent worktrees and generated package metadata
+.kilo/
+*.egg-info/

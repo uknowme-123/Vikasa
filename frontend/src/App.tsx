@@ -3,11 +3,12 @@ import { Layout } from './components/layout/Layout'
 import {
   Alerts,
   DatasetInspector,
+  Environment,
   OpticalSensing,
   Overview,
   PlantMonitoring,
   SensorHistory,
-  SystemStatusPage,
+  SystemStatus,
 } from './pages/DashboardPages'
 
 export default function App() {
@@ -17,11 +18,11 @@ export default function App() {
         <Route path="/" element={<Overview />} />
         <Route path="/plants" element={<PlantMonitoring />} />
         <Route path="/optical" element={<OpticalSensing />} />
+        <Route path="/environment" element={<Environment />} />
         <Route path="/history" element={<SensorHistory />} />
-        <Route path="/trends" element={<SensorHistory />} />
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/data" element={<DatasetInspector />} />
-        <Route path="/status" element={<SystemStatusPage />} />
+        <Route path="/system" element={<SystemStatus />} />
       </Route>
     </Routes>
   )

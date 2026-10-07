@@ -26,6 +26,13 @@ class Config:
     firebase_database_url: Optional[str] = None
     firebase_timeout_seconds: float = 10.0
 
+    # Firebase smoke test (only for manual testing)
+    firebase_smoke_test: bool = False
+
+    # Telegram (optional, for alerts)
+    telegram_bot_token: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
+
     # Logging
     log_level: str = "INFO"
 
@@ -45,6 +52,9 @@ class Config:
             firebase_credentials_path=os.getenv("FIREBASE_CREDENTIALS_PATH"),
             firebase_database_url=os.getenv("FIREBASE_DATABASE_URL"),
             firebase_timeout_seconds=float(os.getenv("FIREBASE_TIMEOUT_SECONDS", "10")),
+            firebase_smoke_test=os.getenv("FIREBASE_SMOKE_TEST", "false").lower() == "true",
+            telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
+            telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             reading_id_pattern=os.getenv("READING_ID_PATTERN", r"^[A-Z0-9-]{1,64}$"),
         )
@@ -68,6 +78,20 @@ class Config:
         if self.firebase_timeout_seconds <= 0:
             errors.append("FIREBASE_TIMEOUT_SECONDS must be greater than zero")
 
+        return errors
+
+    def validate_telegram_config(self) -> list[str]:
+        """Validate Telegram configuration.
+        
+        Returns:
+            List of validation error messages (empty if valid).
+        """
+        errors = []
+        # Telegram is optional; if one is provided, the other must be too
+        has_token = bool(self.telegram_bot_token)
+        has_chat_id = bool(self.telegram_chat_id)
+        if has_token != has_chat_id:
+            errors.append("Both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be provided together")
         return errors
 
 

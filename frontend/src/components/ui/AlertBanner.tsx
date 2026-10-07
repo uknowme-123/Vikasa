@@ -13,30 +13,30 @@ export const AlertBanner = forwardRef<HTMLDivElement, AlertBannerProps>(
     const variantConfig = {
       info: {
         icon: Info,
-        iconClass: 'text-blue-600',
-        bgClass: 'bg-blue-50 border-blue-200',
-        textClass: 'text-blue-800',
+        iconClass: 'text-info',
+        bgClass: 'bg-blue-950/30 border-blue-500/20',
+        textClass: 'text-blue-300',
         titleDefault: 'Information',
       },
       success: {
         icon: CheckCircle,
-        iconClass: 'text-vikasa-600',
-        bgClass: 'bg-vikasa-50 border-vikasa-200',
-        textClass: 'text-vikasa-800',
+        iconClass: 'text-vikasa-400',
+        bgClass: 'bg-vikasa-950/30 border-vikasa-500/20',
+        textClass: 'text-vikasa-300',
         titleDefault: 'Success',
       },
       warning: {
         icon: AlertTriangle,
-        iconClass: 'text-amber-600',
-        bgClass: 'bg-amber-50 border-amber-200',
-        textClass: 'text-amber-800',
+        iconClass: 'text-amber-400',
+        bgClass: 'bg-amber-950/30 border-amber-500/20',
+        textClass: 'text-amber-300',
         titleDefault: 'Warning',
       },
       danger: {
         icon: AlertCircle,
-        iconClass: 'text-red-600',
-        bgClass: 'bg-red-50 border-red-200',
-        textClass: 'text-red-800',
+        iconClass: 'text-red-400',
+        bgClass: 'bg-red-950/30 border-red-500/20',
+        textClass: 'text-red-300',
         titleDefault: 'Error',
       },
     }
@@ -59,7 +59,7 @@ export const AlertBanner = forwardRef<HTMLDivElement, AlertBannerProps>(
           <button
             type="button"
             onClick={onDismiss}
-            className="flex-shrink-0 rounded-md p-1 hover:bg-neutral-200 transition-colors"
+            className="flex-shrink-0 rounded-md p-1 hover:bg-surface-200/50 transition-colors"
             aria-label="Dismiss"
           >
             <X className="h-4 w-4" aria-hidden="true" />
