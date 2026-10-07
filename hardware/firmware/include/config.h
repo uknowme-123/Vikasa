@@ -12,8 +12,10 @@
 #define FIRMWARE_BUILD_DATE __DATE__ " " __TIME__
 
 // Include secrets if available (secrets.h is gitignored)
-#ifdef SECRETS_H
+#if __has_include("secrets.h")
 #include "secrets.h"
+#elif __has_include("../config/secrets.h")
+#include "../config/secrets.h"
 #endif
 
 // Configuration defaults (can be overridden by secrets.h)
@@ -26,7 +28,8 @@
 #endif
 
 #ifndef API_BASE_URL
-#define API_BASE_URL "http://localhost:5000/api"
+// Override this with the LAN-reachable Flask host in secrets.h or a build flag.
+#define API_BASE_URL "http://YOUR_API_HOST:5000/api"
 #endif
 
 #ifndef DEVICE_PLANT_ID

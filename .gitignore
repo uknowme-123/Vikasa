@@ -53,6 +53,7 @@ firebase-debug.log
 
 # Firmware secrets and build outputs
 hardware/firmware/secrets.h
+hardware/firmware/config/secrets.h
 hardware/firmware/.pio/
 hardware/firmware/build/
 

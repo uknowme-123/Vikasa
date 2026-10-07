@@ -100,7 +100,8 @@ void vikasa_loop(VikasaFirmware* fw) {
     
     // Periodic NTP sync
     if (fw->timestamp_mgr.ntp_configured && 
-        now_ms - fw->timestamp_mgr.last_sync_ms > NTP_SYNC_INTERVAL_MS) {
+        (!timestamp_is_synced(&fw->timestamp_mgr) ||
+         now_ms - fw->timestamp_mgr.last_sync_ms > NTP_SYNC_INTERVAL_MS)) {
         timestamp_sync_ntp(&fw->timestamp_mgr);
     }
     
@@ -132,6 +133,20 @@ bool vikasa_measure_once(VikasaFirmware* fw) {
 #if DEVELOPMENT_MODE
     Serial.println("[FW] Starting measurement cycle...");
 #endif
+
+    // Flask rejects the explicit UNSYNCED marker, so defer the measurement
+    // until a valid UTC timestamp is available.
+    if (!timestamp_is_synced(&fw->timestamp_mgr)) {
+        timestamp_sync_ntp(&fw->timestamp_mgr);
+        if (!timestamp_is_synced(&fw->timestamp_mgr)) {
+            fw->measurement_in_progress = false;
+            fw->consecutive_failures++;
+            if (fw->on_error) {
+                fw->on_error("Timestamp not synchronized; measurement deferred");
+            }
+            return false;
+        }
+    }
     
     // 1. Read all sensors
     SensorSuiteReading hw_reading = fw->hw_mgr.read_all(&fw->hw_mgr);
