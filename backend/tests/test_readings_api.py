@@ -104,15 +104,16 @@ def test_plant_summaries_use_stored_readings_only(client):
     ]
 
 
-def test_system_status_does_not_claim_hardware_or_firebase(client):
+def test_system_status_does_not_claim_hardware_or_storage_provider(client):
     response = client.get("/api/system/status")
     data = response.get_json()["data"]
 
     assert response.status_code == 200
     assert data["api"] == "connected"
     assert data["storage_backend"] == "memory"
+    assert data["storage_healthy"] is True
     assert data["esp32"] == "unknown"
-    assert data["firebase"] == "unknown"
+    assert "firebase" not in data
 
 
 def test_alerts_are_truthful_empty_result(client):

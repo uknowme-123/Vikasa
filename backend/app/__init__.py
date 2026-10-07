@@ -16,6 +16,12 @@ def create_storage_service():
     if config.storage_backend == "firebase":
         from backend.app.services.firebase_storage import FirebaseStorage
         return FirebaseStorage()
+    if config.storage_backend == "supabase":
+        from backend.app.services.supabase_storage import SupabaseStorage
+        return SupabaseStorage(
+            url=config.supabase_url,
+            key=config.supabase_service_role_key,
+        )
     else:
         from backend.app.services.memory_storage import InMemoryStorage
         return InMemoryStorage()

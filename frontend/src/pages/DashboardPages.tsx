@@ -1,29 +1,783 @@
 import { useState } from 'react'
-import { AlertTriangle, CheckCircle2, Database, Droplets, FileText, Leaf, Radio, Thermometer, Upload, WifiOff } from 'lucide-react'
+import { Activity, AlertTriangle, Bell, CheckCircle2, Clock3, Cpu, Database, Droplets, FileText, Gauge, Info, Leaf, Radio, Search, ShieldAlert, Sun, Thermometer, Upload, Waves, WifiOff } from 'lucide-react'
 import { useAlerts, usePlants, useReadings, useStatus } from '../hooks/useSensorData'
 import { getDataProvider } from '../services/api'
 import { displayValue, hasCalibratedReflectance, type AlertItem, type CSVValidationResult, type SensorReadingWithMeta } from '../types/sensor'
 import { AlertBanner } from '../components/ui/AlertBanner'
 import { Badge } from '../components/ui/Badge'
 import { Card, CardBody, CardHeader } from '../components/ui/Card'
+import { EmptyState } from '../components/ui/EmptyState'
+import { MetricCard } from '../components/ui/MetricCard'
+import { StatusPill } from '../components/ui/StatusPill'
 
 const fmt = (value?: number, unit = '') => value === undefined ? 'Not available' : `${value.toFixed(unit === 'NDVI' ? 3 : 1)}${unit && unit !== 'NDVI' ? ` ${unit}` : ''}`
 const latest = (items: SensorReadingWithMeta[]) => [...items].sort((a, b) => +new Date(b.timestamp) - +new Date(a.timestamp))[0]
-function PageTitle({ eyebrow, title, detail }: { eyebrow: string; title: string; detail: string }) { return <div className="mb-6"><p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">{eyebrow}</p><h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{title}</h1><p className="mt-2 text-sm text-slate-500">{detail}</p></div> }
 function DemoNotice() { return <AlertBanner variant="warning" title="DEMO DATA">Simulated values are shown for interface demonstration only. No physical hardware, Firebase project, or validated ML result is connected.</AlertBanner> }
-function Metric({ label, value, unit, icon: Icon }: { label: string; value?: number; unit: string; icon: typeof Thermometer }) { return <Card><CardBody><div className="flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-3 text-2xl font-semibold text-slate-950">{fmt(value, unit)}</p></div><div className="rounded-xl bg-emerald-50 p-3 text-emerald-700"><Icon className="h-5 w-5" /></div></div></CardBody></Card> }
-function Trend({ readings, field, label, color }: { readings: SensorReadingWithMeta[]; field: keyof SensorReadingWithMeta; label: string; color: string }) { const points = readings.filter((item) => typeof item[field] === 'number').slice().reverse(); const max = Math.max(...points.map((item) => Number(item[field])), 1); return <Card><CardHeader><h2 className="text-sm font-semibold text-slate-900">{label}</h2></CardHeader><CardBody>{points.length < 2 ? <p className="py-10 text-center text-sm text-slate-500">Not enough data for a trend.</p> : <div className="flex h-40 items-end gap-2">{points.map((point) => <div key={point.reading_id} className="group flex h-full flex-1 items-end"><div className="w-full rounded-t-md" style={{ height: `${Math.max(8, Number(point[field]) / max * 100)}%`, backgroundColor: color }} title={String(point[field])} /></div>)}</div>}<p className="mt-3 text-xs text-slate-500">Trend is based on available demo records; missing values remain missing.</p></CardBody></Card> }
 function statusBadge(value?: string | null) { return <Badge variant={value === 'healthy' || value === 'connected' ? 'success' : value === 'severe' || value === 'disconnected' ? 'danger' : value === 'unknown' ? 'neutral' : 'warning'}>{value ?? 'Not available'}</Badge> }
-export function Overview() { const { data: readings = [], isLoading, error } = useReadings(); const { data: plants = [] } = usePlants(); const { data: alerts = [] } = useAlerts(); const item = latest(readings); if (isLoading) return <Loading title="Loading overview" />; if (error) return <ErrorState />; return <div><PageTitle eyebrow="Observatory" title="Overview" detail="A single view of plant condition, sensing coverage, and system readiness." /><DemoNotice /><div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Temperature" value={item?.temperature_c} unit="°C" icon={Thermometer} /><Metric label="Humidity" value={item?.humidity_pct} unit="%" icon={Droplets} /><Metric label="Soil moisture" value={item?.soil_moisture_pct} unit="%" icon={Leaf} /><Metric label="Ambient light" value={item?.ambient_light_raw} unit="ADC" icon={Radio} /></div><div className="mt-6 grid gap-6 xl:grid-cols-[1.3fr_0.7fr]"><div className="grid gap-6 md:grid-cols-2"><Trend readings={readings} field="temperature_c" label="Temperature trend" color="#f97316" /><Trend readings={readings} field="humidity_pct" label="Humidity trend" color="#0ea5e9" /><Trend readings={readings} field="soil_moisture_pct" label="Soil moisture trend" color="#10b981" /><Trend readings={readings} field="ndvi" label="NDVI trend · calibrated only" color="#84cc16" /></div><Card><CardHeader><h2 className="font-semibold text-slate-900">Latest status</h2></CardHeader><CardBody><div className="space-y-4">{item ? <><div className="flex items-center justify-between"><span className="text-sm text-slate-500">Plant health</span>{statusBadge(item.health_label)}</div><div className="flex items-center justify-between"><span className="text-sm text-slate-500">Last updated</span><span className="text-sm font-medium">{new Date(item.timestamp).toLocaleString()}</span></div><div className="flex items-center justify-between"><span className="text-sm text-slate-500">NDVI</span><span className="font-mono text-sm">{fmt(item.ndvi, 'NDVI')}</span></div></> : <Empty text="No readings available." />}<div className="border-t border-slate-100 pt-4"><p className="mb-3 text-sm font-semibold text-slate-900">Recent alerts</p>{alerts.slice(0, 3).map((alert) => <AlertRow key={alert.id} alert={alert} />)}</div></div></CardBody></Card></div><Card className="mt-6"><CardHeader><h2 className="font-semibold text-slate-900">Plant coverage</h2></CardHeader><CardBody><div className="grid gap-3 md:grid-cols-3">{plants.map((plant) => <div key={plant.plant_id} className="rounded-xl border border-slate-200 p-4"><div className="flex items-center justify-between"><span className="font-semibold">{plant.plant_id}</span>{statusBadge(plant.healthLabel)}</div><p className="mt-2 text-xs text-slate-500">{plant.readingCount} reading(s) · {plant.species ?? 'Species unavailable'}</p></div>)}</div></CardBody></Card></div> }
-export function PlantMonitoring() { const { data: plants = [], isLoading } = usePlants(); const { data: readings = [] } = useReadings(); const [selected, setSelected] = useState(''); const plantReadings = readings.filter((item) => item.plant_id === selected); return <div><PageTitle eyebrow="Biological context" title="Plant Monitoring" detail="Review plant-level summaries without conflating labels with validated model output." /><DemoNotice /><Card className="mt-6"><CardHeader><div className="flex items-center justify-between"><h2 className="font-semibold">Plants in current provider</h2><select value={selected} onChange={(event) => setSelected(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="">Select a plant</option>{plants.map((plant) => <option key={plant.plant_id}>{plant.plant_id}</option>)}</select></div></CardHeader><CardBody>{isLoading ? <Loading title="Loading plants" /> : <div className="grid gap-4 md:grid-cols-3">{plants.map((plant) => <button key={plant.plant_id} onClick={() => setSelected(plant.plant_id)} className="rounded-xl border border-slate-200 p-4 text-left hover:border-emerald-400 hover:bg-emerald-50/40"><div className="flex justify-between"><span className="font-semibold">{plant.plant_id}</span>{statusBadge(plant.healthLabel)}</div><p className="mt-2 text-sm text-slate-500">{plant.species ?? 'Species unavailable'}</p><p className="mt-4 text-xs text-slate-500">{plant.readingCount} reading(s)</p></button>)}</div>}</CardBody></Card>{selected && <Card className="mt-6"><CardHeader><h2 className="font-semibold">{selected} readings</h2></CardHeader><CardBody><ReadingTable readings={plantReadings} /></CardBody></Card>}</div> }
-export function OpticalSensing() { const { data: readings = [], isLoading } = useReadings(); const item = latest(readings); const calibrated = item ? hasCalibratedReflectance(item) : false; return <div><PageTitle eyebrow="Spectroscopy" title="Optical Sensing" detail="Separate raw ADC acquisition from calibrated reflectance and derived indices." /><DemoNotice /><div className="mt-6 grid gap-6 lg:grid-cols-2"><Card><CardHeader><h2 className="font-semibold">Sensing workflow</h2></CardHeader><CardBody><div className="space-y-4 text-sm text-slate-600"><div className="rounded-xl bg-red-50 p-4"><p className="font-semibold text-red-800">Red band · approximately 660 nm</p><p className="mt-1">Illumination and detector response are captured as raw ADC counts, then calibrated against a reference target.</p></div><div className="rounded-xl bg-indigo-50 p-4"><p className="font-semibold text-indigo-800">NIR band · approximately 850 nm</p><p className="mt-1">NIR response is captured separately. Optical geometry, gain, and calibration must be documented before comparison.</p></div><AlertBanner variant="warning">NDVI is shown only when both calibrated reflectance values are available. Raw ADC counts are never used directly for NDVI.</AlertBanner></div></CardBody></Card><Card><CardHeader><h2 className="font-semibold">Latest optical record</h2></CardHeader><CardBody>{isLoading ? <Loading title="Loading optical record" /> : item ? <div className="grid gap-3 sm:grid-cols-2"><OpticalMetric label="Red raw ADC" value={item.red_raw} /><OpticalMetric label="NIR raw ADC" value={item.nir_raw} /><OpticalMetric label="Red reflectance" value={item.red_reflectance} suffix="%" /><OpticalMetric label="NIR reflectance" value={item.nir_reflectance} suffix="%" /><OpticalMetric label="NDVI" value={calibrated ? item.ndvi : undefined} suffix="" /><p className="text-xs text-slate-500 sm:col-span-2">{calibrated ? 'Calibrated reflectance is present in this demo record.' : 'Calibrated reflectance unavailable; NDVI is not available.'}</p></div> : <Empty text="No optical records available." />}</CardBody></Card></div><Card className="mt-6"><CardHeader><h2 className="font-semibold">Optical record history</h2></CardHeader><CardBody><ReadingTable readings={readings} optical /></CardBody></Card></div> }
-export function SensorHistory() { const { data: readings = [], isLoading } = useReadings(); return <div><PageTitle eyebrow="Time series" title="Sensor History" detail="Browse timestamped readings with unavailable values preserved as unavailable." /><DemoNotice /><Card className="mt-6"><CardHeader><h2 className="font-semibold">Historical readings</h2></CardHeader><CardBody>{isLoading ? <Loading title="Loading history" /> : <ReadingTable readings={readings} />}</CardBody></Card></div> }
-export function Alerts() { const { data: alerts = [], isLoading } = useAlerts(); return <div><PageTitle eyebrow="Operations" title="Alerts" detail="Operational notices are separated from experimental conclusions and model claims." /><DemoNotice /><Card className="mt-6"><CardHeader><h2 className="font-semibold">Alert stream</h2></CardHeader><CardBody>{isLoading ? <Loading title="Loading alerts" /> : alerts.length ? alerts.map((alert) => <AlertRow key={alert.id} alert={alert} expanded />) : <Empty text="No alerts available." />}</CardBody></Card></div> }
-export function DatasetInspector() { const [result, setResult] = useState<CSVValidationResult | null>(null); const inspect = (file?: File) => { if (file) void getDataProvider().validateCSV(file).then(setResult) }; return <div><PageTitle eyebrow="Provenance" title="Dataset / CSV Inspector" detail="Inspect CSV structure without merging external datasets into Vikāsa readings." /><DemoNotice /><Card className="mt-6"><CardBody><label className="flex cursor-pointer items-center justify-center gap-3 rounded-xl border-2 border-dashed border-slate-300 p-8 text-sm text-slate-600 hover:border-emerald-500"><Upload className="h-5 w-5" />Choose a CSV file<input type="file" accept=".csv,text/csv" className="sr-only" onChange={(event) => inspect(event.target.files?.[0])} /></label>{result && <div className="mt-6 space-y-5"><div className="grid gap-3 sm:grid-cols-3"><Metric label="Rows" value={result.rowCount} unit="" icon={FileText} /><Metric label="Columns" value={result.columns.length} unit="" icon={Database} /><Metric label="Missing cells" value={Object.values(result.missingValues).reduce((sum, value) => sum + value, 0)} unit="" icon={AlertTriangle} /></div><div className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800"><p className="font-semibold">Provenance warnings</p><ul className="mt-2 list-disc pl-5">{[...result.warnings, ...result.errors].map((warning) => <li key={warning}>{warning}</li>)}</ul></div><p className="text-sm text-slate-500">Columns: {result.columns.join(', ') || 'No columns detected'}</p>{result.preview.length > 0 && <ReadingTable readings={result.preview} />}</div>}</CardBody></Card><Card className="mt-6"><CardHeader><h2 className="font-semibold">Dataset handling policy</h2></CardHeader><CardBody><p className="text-sm text-slate-600">Uploaded CSV files are inspected in-browser and remain separate from demo/API readings. The repository template currently contains headers only; no research dataset is treated as real hardware output.</p></CardBody></Card></div> }
-export function SystemStatusPage() { const { data: status, isLoading } = useStatus(); return <div><PageTitle eyebrow="Readiness" title="System Status" detail="Connectivity indicators reflect the selected provider, not a claim of deployed hardware." /><DemoNotice /><div className="mt-6 grid gap-4 md:grid-cols-3">{(['api', 'esp32', 'firebase'] as const).map((key) => <Card key={key}><CardBody><div className="flex items-center justify-between"><div><p className="text-xs uppercase tracking-wider text-slate-500">{key}</p><p className="mt-3 text-lg font-semibold">{isLoading ? 'Checking…' : status?.[key] ?? 'unknown'}</p></div>{status?.[key] === 'connected' ? <CheckCircle2 className="text-emerald-600" /> : <WifiOff className="text-slate-400" />}</div></CardBody></Card>)}</div><Card className="mt-6"><CardHeader><h2 className="font-semibold">Integration readiness</h2></CardHeader><CardBody><div className="space-y-3 text-sm text-slate-600"><p>Flask API: provider can be configured through <code>VITE_API_BASE_URL</code>.</p><p>Firebase: not claimed as connected; configure it only through the backend environment.</p><p>ESP32: no physical device connection is assumed in demo mode.</p></div></CardBody></Card></div> }
+function overviewTrend(readings: SensorReadingWithMeta[], field: keyof SensorReadingWithMeta) {
+  return readings
+    .filter((reading) => typeof reading[field] === 'number')
+    .slice()
+    .reverse()
+    .map((reading) => Number(reading[field]))
+}
+function OverviewTrend({ readings, field, label, unit, color }: { readings: SensorReadingWithMeta[]; field: keyof SensorReadingWithMeta; label: string; unit: string; color: string }) {
+  const points = overviewTrend(readings, field)
+  const max = Math.max(...points, 1)
+  const min = Math.min(...points, 0)
+  const range = max - min || 1
+  const path = points.map((point, index) => {
+    const x = points.length === 1 ? 0 : (index / (points.length - 1)) * 100
+    const y = 38 - ((point - min) / range) * 30
+    return `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`
+  }).join(' ')
+  const current = points[points.length - 1]
+
+  return <div className="rounded-xl border border-surface-300 bg-surface-0/60 p-4">
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <p className="sensor-label">{label}</p>
+        <p className="mt-2 font-mono text-lg font-semibold text-surface-950">{current === undefined ? 'Not available' : `${current.toFixed(field === 'ndvi' ? 3 : 1)} ${unit}`}</p>
+      </div>
+      <Activity className="h-4 w-4 text-surface-500" aria-hidden="true" />
+    </div>
+    {points.length >= 2 ? <svg className="mt-4 h-16 w-full" viewBox="0 0 100 42" role="img" aria-label={`${label} trend`}>
+      <path d="M 0 38 H 100" stroke="currentColor" className="text-surface-300" strokeWidth="0.5" />
+      <path d={path} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg> : <p className="mt-5 text-xs text-surface-500">Not enough data for a trend.</p>}
+  </div>
+}
+function overviewStatus(value: 'connected' | 'disconnected' | 'unknown' | undefined) {
+  return value ?? 'unknown'
+}
+export function Overview() {
+  const { data: readings = [], isLoading, error } = useReadings()
+  const { data: plants = [] } = usePlants()
+  const { data: alerts = [] } = useAlerts()
+  const { data: systemStatus } = useStatus()
+  const item = latest(readings)
+  const calibrated = item ? hasCalibratedReflectance(item) : false
+  const ndvi = calibrated ? item?.ndvi : undefined
+  const temperatureTrend = overviewTrend(readings, 'temperature_c')
+  const humidityTrend = overviewTrend(readings, 'humidity_pct')
+  const moistureTrend = overviewTrend(readings, 'soil_moisture_pct')
+  const ndviTrend = readings.filter(hasCalibratedReflectance).map((reading) => reading.ndvi).filter((value): value is number => value !== undefined).reverse()
+
+  if (isLoading) return <Loading title="Loading overview" />
+  if (error) return <ErrorState />
+
+  return <div className="space-y-6">
+    <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-vikasa-400">Plant intelligence / live view</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-surface-950 sm:text-4xl">Overview</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-surface-500">A focused readout of plant condition, optical sensing, and environmental context.</p>
+      </div>
+      <div className="flex items-center gap-2 text-xs text-surface-500">
+        <Clock3 className="h-4 w-4" aria-hidden="true" />
+        <span>{item ? `Latest reading ${new Date(item.timestamp).toLocaleString()}` : 'Awaiting sensor readings'}</span>
+      </div>
+    </div>
+
+    <DemoNotice />
+
+    <section aria-labelledby="overview-metrics" className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 id="overview-metrics" className="text-sm font-semibold uppercase tracking-[0.18em] text-surface-500">Current measurements</h2>
+        <span className="text-xs text-surface-500">{readings.length} available reading{readings.length === 1 ? '' : 's'}</span>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Latest NDVI" value={ndvi} unit="" precision={3} trend={ndviTrend} iconColor="green" icon={<Leaf className="h-5 w-5" />} status={ndvi === undefined ? 'unknown' : 'healthy'} />
+        <MetricCard label="Temperature" value={item?.temperature_c} unit="°C" trend={temperatureTrend} iconColor="amber" icon={<Thermometer className="h-5 w-5" />} />
+        <MetricCard label="Humidity" value={item?.humidity_pct} unit="%" trend={humidityTrend} iconColor="blue" icon={<Droplets className="h-5 w-5" />} />
+        <MetricCard label="Soil moisture" value={item?.soil_moisture_pct} unit="%" trend={moistureTrend} iconColor="green" icon={<Gauge className="h-5 w-5" />} />
+      </div>
+    </section>
+
+    <section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]" aria-label="Current monitoring">
+      <Card variant="raised">
+        <CardHeader className="flex items-center justify-between">
+          <div>
+            <p className="sensor-label">Monitoring focus</p>
+            <h2 className="mt-1 text-lg font-semibold text-surface-950">Latest plant state</h2>
+          </div>
+          <StatusPill label="reading" status={item ? 'connected' : 'unknown'} size="sm" />
+        </CardHeader>
+        <CardBody>
+          {item ? <div className="grid gap-6 lg:grid-cols-[1fr_auto]">
+            <div>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="font-mono text-2xl font-semibold text-surface-950">{item.plant_id}</span>
+                {statusBadge(item.health_label)}
+              </div>
+              <p className="mt-2 text-sm text-surface-500">{item.species ?? 'Species unavailable'} · session {item.session_id}</p>
+              <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-lg border border-surface-300 bg-surface-0/60 p-3"><p className="sensor-label">NDVI</p><p className="mt-2 font-mono text-base text-surface-950">{fmt(ndvi, 'NDVI')}</p></div>
+                <div className="rounded-lg border border-surface-300 bg-surface-0/60 p-3"><p className="sensor-label">Ambient light</p><p className="mt-2 font-mono text-base text-surface-950">{fmt(item.ambient_light_raw, 'ADC')}</p></div>
+                <div className="rounded-lg border border-surface-300 bg-surface-0/60 p-3"><p className="sensor-label">Readings</p><p className="mt-2 font-mono text-base text-surface-950">{plants.find((plant) => plant.plant_id === item.plant_id)?.readingCount ?? '—'}</p></div>
+                <div className="rounded-lg border border-surface-300 bg-surface-0/60 p-3"><p className="sensor-label">Calibration</p><p className="mt-2 text-sm text-surface-950">{calibrated ? 'Available' : 'Unavailable'}</p></div>
+              </div>
+            </div>
+            <div className="flex min-w-[150px] flex-col justify-between rounded-xl border border-vikasa-500/20 bg-vikasa-950/20 p-5">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-vikasa-300"><Leaf className="h-4 w-4" aria-hidden="true" /> Health signal</div>
+              <div className="mt-8"><p className="font-mono text-3xl font-semibold text-surface-950">{ndvi === undefined ? '—' : ndvi.toFixed(3)}</p><p className="mt-1 text-xs text-surface-500">{calibrated ? 'Validated reflectance input' : 'Calibrated reflectance unavailable'}</p></div>
+            </div>
+          </div> : <Empty text="No sensor readings available yet." />}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader><p className="sensor-label">System snapshot</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Connection state</h2></CardHeader>
+        <CardBody className="space-y-4">
+          <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-sm text-surface-500"><Database className="h-4 w-4" /> API</span><StatusPill label="api" status={overviewStatus(systemStatus?.api)} size="sm" /></div>
+          <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-sm text-surface-500"><Cpu className="h-4 w-4" /> ESP32</span><StatusPill label="hardware" status={overviewStatus(systemStatus?.esp32)} size="sm" /></div>
+          <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-sm text-surface-500"><Radio className="h-4 w-4" /> Data mode</span><Badge variant="warning">Demo</Badge></div>
+          <div className="border-t border-surface-300 pt-4 text-xs leading-5 text-surface-500">Hardware connectivity is shown only when reported by the configured provider.</div>
+        </CardBody>
+      </Card>
+    </section>
+
+    <section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
+      <Card>
+        <CardHeader className="flex items-center justify-between"><div><p className="sensor-label">Available history</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Environmental trends</h2></div><Waves className="h-5 w-5 text-surface-500" aria-hidden="true" /></CardHeader>
+        <CardBody className="grid gap-3 sm:grid-cols-2">
+          <OverviewTrend readings={readings} field="temperature_c" label="Temperature" unit="°C" color="#fbbf24" />
+          <OverviewTrend readings={readings} field="humidity_pct" label="Humidity" unit="%" color="#60a5fa" />
+          <OverviewTrend readings={readings} field="soil_moisture_pct" label="Soil moisture" unit="%" color="#34d399" />
+          <OverviewTrend readings={readings} field="ndvi" label="NDVI · calibrated only" unit="" color="#a3e635" />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader><div className="flex items-center justify-between"><div><p className="sensor-label">Optical monitoring</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Reflectance summary</h2></div><Sun className="h-5 w-5 text-surface-500" aria-hidden="true" /></div></CardHeader>
+        <CardBody className="space-y-3">
+          <div className="flex items-center justify-between rounded-lg border border-optical-red-500/20 bg-optical-red-950/15 px-3 py-3"><span className="text-sm text-optical-red-300">RED reflectance</span><span className="font-mono text-sm text-surface-950">{fmt(item?.red_reflectance, '%')}</span></div>
+          <div className="flex items-center justify-between rounded-lg border border-optical-nir-500/20 bg-optical-nir-950/15 px-3 py-3"><span className="text-sm text-optical-nir-300">NIR reflectance</span><span className="font-mono text-sm text-surface-950">{fmt(item?.nir_reflectance, '%')}</span></div>
+          <div className="flex items-center justify-between rounded-lg border border-vikasa-500/20 bg-vikasa-950/15 px-3 py-3"><span className="text-sm text-vikasa-300">NDVI</span><span className="font-mono text-sm text-surface-950">{fmt(ndvi, 'NDVI')}</span></div>
+          <p className="pt-2 text-xs leading-5 text-surface-500">{calibrated ? 'Calibrated reflectance is available for this reading.' : 'Calibrated reflectance unavailable. NDVI is not displayed as valid.'}</p>
+        </CardBody>
+      </Card>
+    </section>
+
+    <Card>
+      <CardHeader className="flex items-center justify-between"><div><p className="sensor-label">Operational context</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Plant coverage & alerts</h2></div><span className="text-xs text-surface-500">{alerts.length} alert{alerts.length === 1 ? '' : 's'}</span></CardHeader>
+      <CardBody>
+        <div className="grid gap-6 lg:grid-cols-[1fr_0.8fr]">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{plants.length ? plants.map((plant) => <div key={plant.plant_id} className="rounded-xl border border-surface-300 bg-surface-0/50 p-4"><div className="flex items-center justify-between gap-2"><span className="font-mono text-sm font-semibold text-surface-950">{plant.plant_id}</span>{statusBadge(plant.healthLabel)}</div><p className="mt-2 text-xs text-surface-500">{plant.readingCount} reading(s) · {plant.species ?? 'Species unavailable'}</p></div>) : <Empty text="No plant summaries available." />}</div>
+          <div className="border-t border-surface-300 pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0"><p className="mb-2 text-sm font-semibold text-surface-950">Recent alerts</p>{alerts.length ? alerts.slice(0, 3).map((alert) => <AlertRow key={alert.id} alert={alert} />) : <Empty text="No alerts available." />}</div>
+        </div>
+      </CardBody>
+    </Card>
+  </div>
+}
+export function PlantMonitoring() {
+  const { data: plants = [], isLoading, error } = usePlants()
+  const { data: readings = [], isLoading: readingsLoading } = useReadings()
+  const [selected, setSelected] = useState('')
+  const selectedPlant = plants.find((plant) => plant.plant_id === selected)
+  const plantReadings = readings.filter((item) => item.plant_id === selected)
+  const selectedReading = latest(plantReadings)
+  const selectedCalibrated = selectedReading ? hasCalibratedReflectance(selectedReading) : false
+  const selectedNdvi = selectedCalibrated ? selectedReading?.ndvi : undefined
+  const pageTimestamp = selectedReading ? new Date(selectedReading.timestamp).toLocaleString() : plants.find((plant) => plant.lastUpdated)?.lastUpdated ? new Date(plants.find((plant) => plant.lastUpdated)?.lastUpdated ?? '').toLocaleString() : 'Awaiting plant reading'
+  const providerMode = getDataProvider().mode
+
+  if (error) return <ErrorState />
+
+  return <div className="space-y-6">
+    <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-vikasa-400">Plant monitoring</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-surface-950 sm:text-4xl">Plants</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-surface-500">Review plant-level records and available measurements without inferring unsupported health classifications.</p>
+      </div>
+      <div className="flex items-center gap-2 text-xs text-surface-500">
+        <Clock3 className="h-4 w-4" aria-hidden="true" />
+        <span>{pageTimestamp}</span>
+      </div>
+    </div>
+
+    <DemoNotice />
+
+    <Card variant="raised">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div><p className="sensor-label">Plant registry</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Available plants</h2></div>
+        <Badge variant={providerMode === 'demo' ? 'warning' : 'info'}>{providerMode === 'demo' ? 'Demo data' : 'API data'}</Badge>
+      </CardHeader>
+      <CardBody>
+        {isLoading ? <Loading title="Loading plants" /> : plants.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {plants.map((plant) => {
+            const active = plant.plant_id === selected
+            const plantLatest = latest(readings.filter((reading) => reading.plant_id === plant.plant_id))
+            return <button key={plant.plant_id} type="button" onClick={() => setSelected(plant.plant_id)} className={`rounded-xl border p-4 text-left transition-colors ${active ? 'border-vikasa-400 bg-vikasa-950/20 shadow-[inset_3px_0_0_rgb(52_211_153)]' : 'border-surface-300 bg-surface-0/50 hover:border-vikasa-500/50 hover:bg-surface-0'}`} aria-pressed={active}>
+              <div className="flex items-start justify-between gap-3"><span className="font-mono text-base font-semibold text-surface-950">{plant.plant_id}</span>{statusBadge(plant.healthLabel)}</div>
+              <p className="mt-2 text-sm text-surface-500">{plant.species ?? 'Species unavailable'}</p>
+              <div className="mt-4 flex items-center justify-between text-xs text-surface-500"><span>{plant.readingCount} reading(s)</span><span>{plantLatest ? new Date(plantLatest.timestamp).toLocaleDateString() : plant.lastUpdated ? new Date(plant.lastUpdated).toLocaleDateString() : 'No timestamp'}</span></div>
+            </button>
+          })}
+        </div> : <Empty text="No plants available." />}
+      </CardBody>
+    </Card>
+
+    {selected && <section className="space-y-6" aria-label="Selected plant details">
+      <Card>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div><p className="sensor-label">Selected plant</p><h2 className="mt-1 font-mono text-2xl font-semibold text-surface-950">{selected}</h2><p className="mt-1 text-sm text-surface-500">{selectedPlant?.species ?? 'Species unavailable'}</p></div>
+          {selectedPlant && statusBadge(selectedPlant.healthLabel)}
+        </CardHeader>
+        <CardBody>
+          {readingsLoading ? <Loading title="Loading selected plant" /> : selectedReading ? <div className="space-y-5">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <PlantValue label="Reading count" value={String(selectedPlant?.readingCount ?? plantReadings.length)} />
+              <PlantValue label="Latest reading" value={new Date(selectedReading.timestamp).toLocaleString()} />
+              <PlantValue label="Health status" value={selectedPlant?.healthLabel ?? selectedReading.health_label ?? 'Health status unavailable'} />
+              <PlantValue label="Session" value={selectedReading.session_id} />
+            </div>
+            <div className="border-t border-surface-300 pt-5">
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div><p className="sensor-label">Latest optical summary</p><div className="mt-3 grid gap-3 sm:grid-cols-3"><PlantValue label="RED reflectance" value={selectedReading.red_reflectance === undefined ? 'Not available' : `${selectedReading.red_reflectance.toFixed(2)} %`} accent="red" /><PlantValue label="NIR reflectance" value={selectedReading.nir_reflectance === undefined ? 'Not available' : `${selectedReading.nir_reflectance.toFixed(2)} %`} accent="nir" /><PlantValue label="NDVI" value={selectedNdvi === undefined ? 'Not available' : selectedNdvi.toFixed(3)} accent="green" /></div><p className="mt-3 text-xs text-surface-500">{selectedCalibrated ? 'Calibrated reflectance available.' : 'NDVI unavailable — calibrated reflectance required.'}</p></div>
+                <div><p className="sensor-label">Latest environment summary</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><PlantValue label="Temperature" value={selectedReading.temperature_c === undefined ? 'Not available' : `${selectedReading.temperature_c.toFixed(1)} °C`} /><PlantValue label="Humidity" value={selectedReading.humidity_pct === undefined ? 'Not available' : `${selectedReading.humidity_pct.toFixed(0)} %`} /><PlantValue label="Soil moisture" value={selectedReading.soil_moisture_pct === undefined ? 'Not available' : `${selectedReading.soil_moisture_pct.toFixed(0)} %`} /><PlantValue label="Ambient light" value={selectedReading.ambient_light_raw === undefined ? 'Not available' : `${selectedReading.ambient_light_raw.toFixed(0)} ADC`} /></div></div>
+              </div>
+            </div>
+          </div> : <Empty text="No readings available for this plant." />}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex items-center justify-between"><div><p className="sensor-label">Reading history</p><h2 className="mt-1 text-lg font-semibold text-surface-950">{selected} records</h2></div><span className="text-xs text-surface-500">{plantReadings.length} reading{plantReadings.length === 1 ? '' : 's'}</span></CardHeader>
+        <CardBody><ReadingTable readings={plantReadings} /></CardBody>
+      </Card>
+    </section>}
+  </div>
+}
+export function OpticalSensing() {
+  const { data: readings = [], isLoading, error } = useReadings()
+  const item = latest(readings)
+  const calibrated = item ? hasCalibratedReflectance(item) : false
+  const ndvi = calibrated ? item?.ndvi : undefined
+  const redReflectance = item?.red_reflectance
+  const nirReflectance = item?.nir_reflectance
+  const latestTimestamp = item ? new Date(item.timestamp).toLocaleString() : 'Awaiting optical reading'
+
+  if (isLoading) return <Loading title="Loading optical sensing" />
+  if (error) return <ErrorState />
+
+  return <div className="space-y-6">
+    <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-optical-nir-400">Spectroscopy / signal chain</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-surface-950 sm:text-4xl">Optical Sensing</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-surface-500">Separate RED and NIR responses, preserve raw acquisition, and show derived plant signals only after calibration.</p>
+      </div>
+      <div className="flex items-center gap-2 text-xs text-surface-500">
+        <Radio className="h-4 w-4" aria-hidden="true" />
+        <span>{latestTimestamp}</span>
+      </div>
+    </div>
+
+    <DemoNotice />
+
+    <Card variant="raised">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="sensor-label">Signal workflow</p>
+          <h2 className="mt-1 text-lg font-semibold text-surface-950">RED + NIR → reflectance → NDVI</h2>
+        </div>
+        <Badge variant={calibrated ? 'success' : 'warning'}>{calibrated ? 'Calibrated path available' : 'Calibration required'}</Badge>
+      </CardHeader>
+      <CardBody>
+        <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-center">
+          <div className="rounded-xl border border-optical-red-500/25 bg-optical-red-950/20 p-5">
+            <div className="flex items-center justify-between"><span className="text-xs font-semibold uppercase tracking-[0.18em] text-optical-red-300">RED</span><span className="font-mono text-xs text-optical-red-400">~660 nm</span></div>
+            <p className="mt-4 text-sm text-surface-500">Reflectance measurement</p>
+            <p className="mt-2 text-xs text-surface-500">Raw signal acquired separately from NIR.</p>
+          </div>
+          <span className="hidden text-surface-500 md:block" aria-hidden="true">→</span>
+          <div className="rounded-xl border border-optical-nir-500/25 bg-optical-nir-950/20 p-5">
+            <div className="flex items-center justify-between"><span className="text-xs font-semibold uppercase tracking-[0.18em] text-optical-nir-300">NIR</span><span className="font-mono text-xs text-optical-nir-400">~850 nm</span></div>
+            <p className="mt-4 text-sm text-surface-500">Reflectance measurement</p>
+            <p className="mt-2 text-xs text-surface-500">Reference and geometry remain part of calibration.</p>
+          </div>
+          <span className="hidden text-surface-500 md:block" aria-hidden="true">→</span>
+          <div className="rounded-xl border border-vikasa-500/25 bg-vikasa-950/20 p-5">
+            <div className="flex items-center justify-between"><span className="text-xs font-semibold uppercase tracking-[0.18em] text-vikasa-300">NDVI</span><Waves className="h-4 w-4 text-vikasa-400" aria-hidden="true" /></div>
+            <p className="mt-4 text-sm text-surface-500">Plant condition signal</p>
+            <p className="mt-2 text-xs text-surface-500">Displayed only from calibrated reflectance.</p>
+          </div>
+        </div>
+      </CardBody>
+    </Card>
+
+    <section className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]" aria-label="Latest optical reading">
+      <Card>
+        <CardHeader className="flex items-center justify-between">
+          <div><p className="sensor-label">Latest optical record</p><h2 className="mt-1 text-lg font-semibold text-surface-950">{item ? item.plant_id : 'No optical record'}</h2></div>
+          {item && <span className="font-mono text-xs text-surface-500">{item.reading_id}</span>}
+        </CardHeader>
+        <CardBody>
+          {item ? <div className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <OpticalMetric label="RED raw signal" value={item.red_raw} />
+              <OpticalMetric label="NIR raw signal" value={item.nir_raw} />
+            </div>
+            <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-surface-500"><span className="h-px flex-1 bg-surface-300" /> Calibration boundary <span className="h-px flex-1 bg-surface-300" /></div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <OpticalMetric label="RED reflectance" value={item.red_reflectance} suffix="%" />
+              <OpticalMetric label="NIR reflectance" value={item.nir_reflectance} suffix="%" />
+            </div>
+            <div className="rounded-xl border border-surface-300 bg-surface-0/50 p-4 text-xs leading-5 text-surface-500">RAW SIGNAL → calibration → reflectance → NDVI. Raw ADC counts are not reflectance and are never used directly for NDVI.</div>
+          </div> : <Empty text="No optical records available." />}
+        </CardBody>
+      </Card>
+
+      <Card variant="raised">
+        <CardHeader><div className="flex items-center justify-between"><div><p className="sensor-label">Derived signal</p><h2 className="mt-1 text-lg font-semibold text-surface-950">NDVI</h2></div><Leaf className="h-5 w-5 text-vikasa-400" aria-hidden="true" /></div></CardHeader>
+        <CardBody>
+          <div className="rounded-xl border border-vikasa-500/25 bg-vikasa-950/20 p-5">
+            <p className="font-mono text-4xl font-semibold text-surface-950">{ndvi === undefined ? '—' : ndvi.toFixed(3)}</p>
+            <p className="mt-2 text-sm text-vikasa-300">{calibrated ? 'Calibrated reflectance available' : 'NDVI unavailable — calibrated reflectance required'}</p>
+          </div>
+          <div className="mt-5 flex items-center justify-between border-b border-surface-300 pb-3"><span className="text-sm text-surface-500">Calibration state</span><Badge variant={calibrated ? 'success' : 'warning'}>{calibrated ? 'Calibrated' : item ? 'Calibration required' : 'Unknown'}</Badge></div>
+          <p className="mt-4 text-xs leading-5 text-surface-500">NDVI is shown only when both RED and NIR calibrated reflectance values exist in the selected reading.</p>
+        </CardBody>
+      </Card>
+    </section>
+
+    <section className="grid gap-6 lg:grid-cols-[1fr_0.8fr]">
+      <Card>
+        <CardHeader><div className="flex items-center justify-between"><div><p className="sensor-label">Calibrated comparison</p><h2 className="mt-1 text-lg font-semibold text-surface-950">RED vs NIR reflectance</h2></div><Badge variant={calibrated ? 'success' : 'neutral'}>{calibrated ? 'Available' : 'Not available'}</Badge></div></CardHeader>
+        <CardBody>
+          {calibrated ? <div className="space-y-5">
+            <ReflectanceBar label="RED" value={redReflectance} color="red" />
+            <ReflectanceBar label="NIR" value={nirReflectance} color="nir" />
+            <p className="text-xs text-surface-500">Comparison uses only the latest available calibrated reading; no additional values are inferred.</p>
+          </div> : <Empty text="Reflectance comparison unavailable — calibrated values required." />}
+        </CardBody>
+      </Card>
+      <Card>
+        <CardHeader><p className="sensor-label">Measurement chain</p><h2 className="mt-1 text-lg font-semibold text-surface-950">How Vikāsa reads light</h2></CardHeader>
+        <CardBody><div className="space-y-3 text-sm text-surface-500"><p><span className="font-medium text-surface-950">LED illumination</span> → leaf reflection</p><p><span className="font-medium text-surface-950">Photodiode sensing</span> → ADC acquisition</p><p><span className="font-medium text-surface-950">Calibration</span> → reflectance estimation</p><p><span className="font-medium text-surface-950">Reflectance pair</span> → NDVI when valid</p></div></CardBody>
+      </Card>
+    </section>
+
+    <Card>
+      <CardHeader className="flex items-center justify-between"><div><p className="sensor-label">Optical history</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Recorded signal values</h2></div><span className="text-xs text-surface-500">{readings.length} reading{readings.length === 1 ? '' : 's'}</span></CardHeader>
+      <CardBody><ReadingTable readings={readings} optical /></CardBody>
+    </Card>
+  </div>
+}
+function ReflectanceBar({ label, value, color }: { label: string; value?: number; color: 'red' | 'nir' }) {
+  const fill = value === undefined ? 0 : Math.min(Math.max(value, 0), 100)
+  const accent = color === 'red' ? 'bg-optical-red-500' : 'bg-optical-nir-500'
+  const text = color === 'red' ? 'text-optical-red-300' : 'text-optical-nir-300'
+  return <div>
+    <div className="mb-2 flex items-center justify-between text-sm"><span className={`font-medium ${text}`}>{label}</span><span className="font-mono text-surface-950">{value === undefined ? 'Not available' : `${value.toFixed(2)} %`}</span></div>
+    <div className="h-2 overflow-hidden rounded-full bg-surface-300"><div className={`h-full rounded-full ${accent}`} style={{ width: `${fill}%` }} /></div>
+  </div>
+}
+export function SensorHistory() {
+  const { data: readings = [], isLoading, error } = useReadings()
+  const [showOptical, setShowOptical] = useState(true)
+  const item = latest(readings)
+  const plantCount = new Set(readings.map((reading) => reading.plant_id)).size
+  const providerMode = getDataProvider().mode
+  const latestTimestamp = item ? new Date(item.timestamp).toLocaleString() : 'Awaiting sensor reading'
+
+  if (isLoading) return <Loading title="Loading sensor history" />
+  if (error) return <ErrorState />
+
+  return <div className="space-y-6">
+    <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-vikasa-400">Sensor data</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-surface-950 sm:text-4xl">History</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-surface-500">Recorded measurements across plants and sessions, with unavailable and uncalibrated values preserved as-is.</p>
+      </div>
+      <div className="flex items-center gap-2 text-xs text-surface-500">
+        <Clock3 className="h-4 w-4" aria-hidden="true" />
+        <span>{latestTimestamp}</span>
+      </div>
+    </div>
+
+    <DemoNotice />
+
+    <section aria-label="History summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <HistorySummary label="Readings loaded" value={readings.length ? String(readings.length) : 'Not available'} detail="Current provider result" icon={<Database className="h-4 w-4 text-vikasa-400" />} />
+      <HistorySummary label="Plants represented" value={readings.length ? String(plantCount) : 'Not available'} detail="Unique plant IDs" icon={<Leaf className="h-4 w-4 text-vikasa-400" />} />
+      <HistorySummary label="Latest timestamp" value={item ? new Date(item.timestamp).toLocaleDateString() : 'Not available'} detail={item ? new Date(item.timestamp).toLocaleTimeString() : 'No reading available'} icon={<Clock3 className="h-4 w-4 text-surface-500" />} />
+      <HistorySummary label="Data mode" value={providerMode === 'demo' ? 'Demo / simulated' : 'API'} detail="Provider source" icon={<Radio className="h-4 w-4 text-optical-nir-400" />} />
+    </section>
+
+    <Card variant="raised">
+      <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div><p className="sensor-label">Measurement log</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Recorded sensor readings</h2><p className="mt-1 text-xs text-surface-500">Scroll within the table on narrow screens to preserve data readability.</p></div>
+        <div className="flex flex-wrap items-center gap-2" aria-label="Table display controls">
+          <span className="text-xs uppercase tracking-[0.14em] text-surface-500">Columns</span>
+          <button type="button" onClick={() => setShowOptical((visible) => !visible)} aria-pressed={showOptical} className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${showOptical ? 'border-vikasa-500/40 bg-vikasa-950/30 text-vikasa-300' : 'border-surface-300 bg-surface-0 text-surface-500 hover:text-surface-950'}`}>
+            {showOptical ? 'Optical visible' : 'Show optical'}
+          </button>
+          <span className="rounded-lg border border-surface-300 bg-surface-0 px-3 py-2 text-xs text-surface-500">Environmental visible</span>
+        </div>
+      </CardHeader>
+      <CardBody className="p-0">
+        <div className="overflow-x-auto px-3 pb-3 sm:px-6 sm:pb-6">
+          <div className="min-w-[680px] pt-2">
+            <ReadingTable readings={readings} optical={showOptical} />
+          </div>
+        </div>
+        <div className="border-t border-surface-300 px-6 py-3 text-xs leading-5 text-surface-500">Raw RED/NIR columns are ADC counts. NDVI is shown only when the reading contains both calibrated reflectance values.</div>
+      </CardBody>
+    </Card>
+  </div>
+}
+export function Environment() {
+  const { data: readings = [], isLoading, error } = useReadings()
+  const { data: systemStatus } = useStatus()
+  const item = latest(readings)
+  const providerMode = getDataProvider().mode
+  const latestTimestamp = item ? new Date(item.timestamp).toLocaleString() : 'Awaiting environmental reading'
+  const temperatureTrend = environmentalTrend(readings, 'temperature_c')
+  const humidityTrend = environmentalTrend(readings, 'humidity_pct')
+  const moistureTrend = environmentalTrend(readings, 'soil_moisture_pct')
+
+  if (isLoading) return <Loading title="Loading environment" />
+  if (error) return <ErrorState />
+
+  return <div className="space-y-6">
+    <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-vikasa-400">Environmental monitoring</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-surface-950 sm:text-4xl">Environment</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-surface-500">Conditions surrounding the monitored plant, reported from the available sensor reading fields.</p>
+      </div>
+      <div className="flex items-center gap-2 text-xs text-surface-500">
+        <Clock3 className="h-4 w-4" aria-hidden="true" />
+        <span>{latestTimestamp}</span>
+      </div>
+    </div>
+
+    <DemoNotice />
+
+    <section aria-labelledby="environment-metrics" className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 id="environment-metrics" className="text-sm font-semibold uppercase tracking-[0.18em] text-surface-500">Current measurements</h2>
+        <span className="text-xs text-surface-500">{readings.length} available reading{readings.length === 1 ? '' : 's'}</span>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Temperature" value={item?.temperature_c} unit="°C" trend={temperatureTrend} iconColor="amber" icon={<Thermometer className="h-5 w-5" />} />
+        <MetricCard label="Humidity" value={item?.humidity_pct} unit="%" trend={humidityTrend} iconColor="blue" icon={<Droplets className="h-5 w-5" />} />
+        <MetricCard label="Soil moisture" value={item?.soil_moisture_pct} unit="%" trend={moistureTrend} iconColor="green" icon={<Gauge className="h-5 w-5" />} />
+        <MetricCard label="Ambient light" value={item?.ambient_light_raw} unit="ADC" iconColor="violet" icon={<Sun className="h-5 w-5" />} />
+      </div>
+    </section>
+
+    <section className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]" aria-label="Current environmental conditions">
+      <Card variant="raised">
+        <CardHeader className="flex items-center justify-between">
+          <div><p className="sensor-label">Latest reading</p><h2 className="mt-1 text-lg font-semibold text-surface-950">{item ? item.plant_id : 'No current conditions'}</h2></div>
+          <Badge variant={providerMode === 'demo' ? 'warning' : 'info'}>{providerMode === 'demo' ? 'Demo data' : 'API data'}</Badge>
+        </CardHeader>
+        <CardBody>
+          {item ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <ConditionValue label="Temperature" value={item.temperature_c} unit="°C" icon={<Thermometer className="h-4 w-4 text-amber-400" />} />
+            <ConditionValue label="Humidity" value={item.humidity_pct} unit="%" icon={<Droplets className="h-4 w-4 text-blue-400" />} />
+            <ConditionValue label="Soil moisture" value={item.soil_moisture_pct} unit="%" icon={<Leaf className="h-4 w-4 text-vikasa-400" />} />
+            <ConditionValue label="Ambient light" value={item.ambient_light_raw} unit="ADC" icon={<Sun className="h-4 w-4 text-optical-nir-400" />} />
+          </div> : <Empty text="No sensor readings available yet." />}
+          {item && <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-surface-300 pt-4 text-xs text-surface-500"><span>Reading ID: <strong className="font-mono font-normal text-surface-950">{item.reading_id}</strong></span><span>Session: <strong className="font-mono font-normal text-surface-950">{item.session_id}</strong></span><span>{latestTimestamp}</span></div>}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader><p className="sensor-label">Sensor status</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Data availability</h2></CardHeader>
+        <CardBody className="space-y-4">
+          <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-sm text-surface-500"><Database className="h-4 w-4" /> API</span><StatusPill label="provider" status={systemStatus?.api ?? 'unknown'} size="sm" /></div>
+          <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-sm text-surface-500"><Thermometer className="h-4 w-4" /> Environmental sensors</span><StatusPill label="individual status unavailable" status="unknown" size="sm" /></div>
+          <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-sm text-surface-500"><Radio className="h-4 w-4" /> Data mode</span><Badge variant={providerMode === 'demo' ? 'warning' : 'info'}>{providerMode === 'demo' ? 'Demo / simulated' : 'API'}</Badge></div>
+          <p className="border-t border-surface-300 pt-4 text-xs leading-5 text-surface-500">Individual environmental sensor connectivity is not reported by the current provider.</p>
+        </CardBody>
+      </Card>
+    </section>
+
+    <Card>
+      <CardHeader className="flex items-center justify-between"><div><p className="sensor-label">Available history</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Environmental trends</h2></div><Activity className="h-5 w-5 text-surface-500" aria-hidden="true" /></CardHeader>
+      <CardBody className="grid gap-3 md:grid-cols-3">
+        <EnvironmentalTrend readings={readings} field="temperature_c" label="Temperature" unit="°C" color="#fbbf24" />
+        <EnvironmentalTrend readings={readings} field="humidity_pct" label="Humidity" unit="%" color="#60a5fa" />
+        <EnvironmentalTrend readings={readings} field="soil_moisture_pct" label="Soil moisture" unit="%" color="#34d399" />
+      </CardBody>
+    </Card>
+  </div>
+}
+function AlertSummary({ label, value, detail, icon, tone }: { label: string; value: number; detail: string; icon: React.ReactNode; tone: string }) {
+  return <div className="rounded-xl border border-surface-300 bg-surface-100 p-4">
+    <div className="flex items-center justify-between gap-3"><p className="sensor-label">{label}</p><span className={tone}>{icon}</span></div>
+    <p className="mt-3 font-mono text-2xl font-semibold text-surface-950">{value}</p>
+    <p className="mt-1 text-xs text-surface-500">{detail}</p>
+  </div>
+}
+export function Alerts() {
+  const { data: alerts = [], isLoading, error } = useAlerts()
+  const providerMode = getDataProvider().mode
+  const latestAlert = [...alerts].sort((a, b) => +new Date(b.timestamp) - +new Date(a.timestamp))[0]
+  const criticalCount = alerts.filter((alert) => alert.severity === 'critical').length
+  const warningCount = alerts.filter((alert) => alert.severity === 'warning').length
+  const infoCount = alerts.filter((alert) => alert.severity === 'info').length
+
+  return <div className="space-y-6">
+    <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-vikasa-400">Alert center</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-surface-950 sm:text-4xl">Alerts</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-surface-500">Review operational notices emitted by the selected data provider. Alerts are presented as records, not as new threshold or ML conclusions.</p>
+      </div>
+      <div className="flex items-center gap-2 text-xs text-surface-500">
+        <Clock3 className="h-4 w-4" aria-hidden="true" />
+        <span>{latestAlert ? `Latest alert ${new Date(latestAlert.timestamp).toLocaleString()}` : 'No alert timestamp available'}</span>
+      </div>
+    </div>
+
+    {providerMode === 'demo' && <DemoNotice />}
+
+    {error ? <ErrorState /> : <><section aria-labelledby="alert-summary" className="space-y-3">
+      <div className="flex items-center justify-between"><h2 id="alert-summary" className="text-sm font-semibold uppercase tracking-[0.18em] text-surface-500">Loaded alert summary</h2><Badge variant={providerMode === 'demo' ? 'warning' : 'info'}>{providerMode === 'demo' ? 'Demo / simulated' : 'API data'}</Badge></div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <AlertSummary label="Total alerts" value={alerts.length} detail="Current provider result" icon={<Bell className="h-4 w-4" />} tone="text-vikasa-400" />
+        <AlertSummary label="Critical" value={criticalCount} detail="Severity: critical" icon={<ShieldAlert className="h-4 w-4" />} tone="text-red-400" />
+        <AlertSummary label="Warnings" value={warningCount} detail="Severity: warning" icon={<AlertTriangle className="h-4 w-4" />} tone="text-amber-400" />
+        <AlertSummary label="Informational" value={infoCount} detail="Severity: info" icon={<Info className="h-4 w-4" />} tone="text-blue-400" />
+      </div>
+    </section>
+
+    <Card variant="raised">
+      <CardHeader className="flex items-center justify-between gap-4">
+        <div><p className="sensor-label">Operational feed</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Alert stream</h2><p className="mt-1 text-xs text-surface-500">Severity, event context, timestamp, and plant association from the existing alert provider.</p></div>
+        <Bell className="h-5 w-5 shrink-0 text-surface-500" aria-hidden="true" />
+      </CardHeader>
+      <CardBody className="p-0">
+        {isLoading ? <div className="p-6"><Loading title="Loading alerts" /></div> : alerts.length ? <div className="divide-y divide-surface-300">{alerts.map((alert) => <AlertRow key={alert.id} alert={alert} expanded />)}</div> : <div className="p-6"><Empty text="No alerts are currently available." /></div>}
+      </CardBody>
+    </Card>
+
+    <Card>
+      <CardBody className="flex gap-3">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-surface-500" aria-hidden="true" />
+        <p className="text-xs leading-5 text-surface-500">Alert generation remains outside this page. The future pipeline is sensor reading → backend rule evaluation → alert creation → dashboard and Telegram delivery.</p>
+      </CardBody>
+    </Card>
+    </>}
+  </div>
+}
+function DatasetMetric({ label, value, detail, icon, tone = 'text-surface-500' }: { label: string; value: string; detail: string; icon: React.ReactNode; tone?: string }) {
+  return <div className="rounded-xl border border-surface-300 bg-surface-100 p-4"><div className="flex items-center justify-between gap-3"><p className="sensor-label">{label}</p><span className={tone}>{icon}</span></div><p className="mt-3 font-mono text-xl font-semibold text-surface-950">{value}</p><p className="mt-1 text-xs text-surface-500">{detail}</p></div>
+}
+export function DatasetInspector() {
+  const [result, setResult] = useState<CSVValidationResult | null>(null)
+  const [fileName, setFileName] = useState<string | null>(null)
+  const inspect = (file?: File) => {
+    if (!file) return
+    setFileName(file.name)
+    void getDataProvider().validateCSV(file).then(setResult)
+  }
+  const missingCells = result ? Object.values(result.missingValues).reduce((sum, value) => sum + value, 0) : 0
+  const issues = result ? [...result.errors, ...result.warnings] : []
+  const providerMode = getDataProvider().mode
+
+  return <div className="space-y-6">
+    <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-vikasa-400">Data inspector</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-surface-950 sm:text-4xl">Dataset Inspector</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-surface-500">Validate imported sensor CSV structure and review provenance before any dataset is considered for analysis.</p>
+      </div>
+      <Badge variant={providerMode === 'demo' ? 'warning' : 'info'}>{providerMode === 'demo' ? 'DEMO PROVIDER' : 'API PROVIDER'}</Badge>
+    </div>
+
+    {providerMode === 'demo' && <DemoNotice />}
+
+    <Card variant="raised">
+      <CardHeader className="flex items-start justify-between gap-4">
+        <div><p className="sensor-label">Import workflow</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Upload a CSV for inspection</h2><p className="mt-1 text-xs leading-5 text-surface-500">Only comma-separated sensor datasets are supported. Files are parsed in-browser and remain separate from demo/API readings.</p></div>
+        <Upload className="h-5 w-5 shrink-0 text-surface-500" aria-hidden="true" />
+      </CardHeader>
+      <CardBody>
+        <label className="group flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-vikasa-500/40 bg-vikasa-950/10 px-6 py-10 text-center transition-colors hover:border-vikasa-400 hover:bg-vikasa-950/20 focus-within:ring-2 focus-within:ring-vikasa-400">
+          <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-vikasa-500/30 bg-vikasa-950/30 text-vikasa-400"><Upload className="h-5 w-5" aria-hidden="true" /></span>
+          <span className="mt-4 text-sm font-semibold text-surface-950">{fileName ?? 'Select a CSV file'}</span>
+          <span className="mt-1 text-xs text-surface-500">{fileName ? 'Select another file to run validation again.' : 'Choose a sensor CSV to inspect its structure and provenance.'}</span>
+          <span className="mt-4 rounded-lg border border-vikasa-500/30 px-3 py-2 text-xs font-medium text-vikasa-300">Choose CSV</span>
+          <input type="file" accept=".csv,text/csv" className="sr-only" onChange={(event) => inspect(event.target.files?.[0])} />
+        </label>
+        {fileName && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-surface-500"><span>Current file: <strong className="font-mono font-normal text-surface-950">{fileName}</strong></span>{result && <Badge variant={result.valid ? 'success' : 'danger'}>{result.valid ? 'Valid structure' : 'Invalid structure'}</Badge>}</div>}
+      </CardBody>
+    </Card>
+
+    {!result ? <Card><EmptyState title="No dataset inspected" description="Select a CSV file above to begin structural validation. No sample records are loaded automatically." icon="upload" /></Card> : <><section aria-labelledby="validation-summary" className="space-y-3">
+      <div className="flex items-center justify-between"><h2 id="validation-summary" className="text-sm font-semibold uppercase tracking-[0.18em] text-surface-500">Validation summary</h2><Badge variant={result.valid ? 'success' : 'danger'}>{result.valid ? 'Valid' : 'Invalid'}</Badge></div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <DatasetMetric label="Validation" value={result.valid ? 'Valid' : 'Invalid'} detail="Schema structure only" icon={result.valid ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />} tone={result.valid ? 'text-vikasa-400' : 'text-red-400'} />
+        <DatasetMetric label="Rows detected" value={String(result.rowCount)} detail="Data rows in file" icon={<FileText className="h-4 w-4" />} />
+        <DatasetMetric label="Columns detected" value={String(result.columns.length)} detail="Header fields found" icon={<Database className="h-4 w-4" />} />
+        <DatasetMetric label="Missing cells" value={String(missingCells)} detail="Blank values counted" icon={<AlertTriangle className="h-4 w-4" />} tone={missingCells ? 'text-amber-400' : 'text-vikasa-400'} />
+        <DatasetMetric label="Preview rows" value={String(result.preview.length)} detail="Parsed preview available" icon={<Search className="h-4 w-4" />} />
+      </div>
+    </section>
+
+    <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]" aria-label="Dataset quality and provenance">
+      <Card>
+        <CardHeader><p className="sensor-label">Data quality</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Validation findings</h2></CardHeader>
+        <CardBody>{issues.length ? <div className="space-y-3">{issues.map((issue, index) => <AlertBanner key={`${issue}-${index}`} variant={result.errors.includes(issue) ? 'danger' : 'warning'} title={result.errors.includes(issue) ? 'Error' : 'Warning'}>{issue}</AlertBanner>)}</div> : <AlertBanner variant="success" title="No validation findings">The file passed the available structural checks. This does not establish scientific validity or measurement accuracy.</AlertBanner>}</CardBody>
+      </Card>
+      <Card>
+        <CardHeader><p className="sensor-label">Provenance review</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Warnings and metadata</h2></CardHeader>
+        <CardBody className="space-y-4"><div className="flex items-center justify-between gap-3"><span className="text-sm text-surface-500">Missing required columns</span><Badge variant={result.missingColumns.length ? 'danger' : 'success'}>{result.missingColumns.length ? String(result.missingColumns.length) : 'None'}</Badge></div><div className="flex items-center justify-between gap-3"><span className="text-sm text-surface-500">Extra columns</span><Badge variant={result.extraColumns.length ? 'warning' : 'success'}>{result.extraColumns.length ? String(result.extraColumns.length) : 'None'}</Badge></div><p className="border-t border-surface-300 pt-4 text-xs leading-5 text-surface-500">Successful parsing is not a claim that the dataset has verified provenance, calibration, or research validity.</p></CardBody>
+      </Card>
+    </section>
+
+    <Card>
+      <CardHeader className="flex items-center justify-between gap-4"><div><p className="sensor-label">Parsed preview</p><h2 className="mt-1 text-lg font-semibold text-surface-950">CSV records</h2><p className="mt-1 text-xs text-surface-500">Only rows parsed by the existing validator are shown.</p></div><Badge variant={result.preview.length ? 'info' : 'neutral'}>{result.preview.length ? `${result.preview.length} preview rows` : 'No preview rows'}</Badge></CardHeader>
+      <CardBody className="p-0">{result.preview.length ? <div className="overflow-x-auto"><div className="min-w-[760px] p-2"><ReadingTable readings={result.preview} optical /></div></div> : <EmptyState title="No preview rows available" description="The validator did not produce parsed preview records for this file." icon="search" />}</CardBody>
+    </Card>
+
+    <Card><CardHeader><h2 className="text-lg font-semibold text-surface-950">Dataset handling policy</h2></CardHeader><CardBody><p className="text-sm leading-6 text-surface-500">Uploaded CSV files are inspected in-browser and remain separate from demo/API readings. No uploaded dataset is treated as real hardware output, and this page does not train models or claim accuracy.</p></CardBody></Card>
+    </>}
+  </div>
+}
+function SystemStatusCard({ label, detail, status, icon }: { label: string; detail: string; status: 'connected' | 'disconnected' | 'unknown'; icon: React.ReactNode }) {
+  return <Card><CardBody><div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="sensor-label">{label}</p><p className="mt-2 text-sm text-surface-500">{detail}</p></div><span className="shrink-0 text-surface-500">{icon}</span></div><div className="mt-5"><StatusPill label="status" status={status} size="sm" /></div></CardBody></Card>
+}
+function PipelineNode({ label, detail, status, icon, future = false }: { label: string; detail: string; status: 'connected' | 'disconnected' | 'unknown'; icon: React.ReactNode; future?: boolean }) {
+  return <div className="min-w-0 flex-1 rounded-xl border border-surface-300 bg-surface-100 p-4"><div className="flex items-start justify-between gap-3"><span className="text-surface-500">{icon}</span>{future ? <Badge variant="warning">Planned</Badge> : <StatusPill label="status" status={status} size="sm" />}</div><p className="mt-4 text-sm font-semibold text-surface-950">{label}</p><p className="mt-1 text-xs leading-5 text-surface-500">{future ? detail : status === 'unknown' ? 'Status unavailable' : detail}</p></div>
+}
+function ReadinessItem({ title, detail, pending = false }: { title: string; detail: string; pending?: boolean }) {
+  return <div className="flex items-start gap-3"><span className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${pending ? 'bg-amber-950/40 text-amber-400' : 'bg-vikasa-950/40 text-vikasa-400'}`}>{pending ? <Clock3 className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}</span><div><p className="text-sm font-medium text-surface-950">{title}</p><p className="mt-1 text-xs leading-5 text-surface-500">{detail}</p></div></div>
+}
+export function SystemStatusPage() {
+  const { data: status, isLoading, error } = useStatus()
+  const providerMode = getDataProvider().mode
+  const apiStatus = isLoading ? 'unknown' : status?.api ?? 'unknown'
+  const esp32Status = isLoading ? 'unknown' : status?.esp32 ?? 'unknown'
+  const databaseStatus = isLoading ? 'unknown' : status?.storageHealthy ? 'connected' : 'unknown'
+
+  return <div className="space-y-6">
+    <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-vikasa-400">System</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-surface-950 sm:text-4xl">System Status</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-surface-500">Inspect the current provider, device, and storage boundaries without implying physical deployment or unverified connectivity.</p>
+      </div>
+      <Badge variant={providerMode === 'demo' ? 'warning' : 'info'}>{providerMode === 'demo' ? 'DEMO / SIMULATED DATA' : 'API provider'}</Badge>
+    </div>
+
+    {providerMode === 'demo' && <DemoNotice />}
+    {error ? <ErrorState /> : <><section aria-labelledby="system-overview" className="space-y-3">
+      <div className="flex items-center justify-between"><h2 id="system-overview" className="text-sm font-semibold uppercase tracking-[0.18em] text-surface-500">System overview</h2><span className="text-xs text-surface-500">Current provider status</span></div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <SystemStatusCard label="Flask API" detail="Dashboard data provider" status={apiStatus} icon={<Database className="h-5 w-5" />} />
+        <SystemStatusCard label="ESP32" detail="Physical device boundary" status={esp32Status} icon={<Cpu className="h-5 w-5" />} />
+        <SystemStatusCard label="Database / storage" detail={status?.storageBackend ? `Active provider: ${status.storageBackend}` : 'Storage provider status'} status={databaseStatus} icon={<Database className="h-5 w-5" />} />
+        <Card><CardBody><div className="flex items-start justify-between gap-4"><div><p className="sensor-label">Data mode</p><p className="mt-2 text-sm text-surface-500">{providerMode === 'demo' ? 'Simulated provider output' : 'Selected API provider'}</p></div><Radio className="h-5 w-5 shrink-0 text-surface-500" /></div><div className="mt-5"><Badge variant={providerMode === 'demo' ? 'warning' : 'info'}>{providerMode === 'demo' ? 'Demo' : 'API'}</Badge></div></CardBody></Card>
+      </div>
+    </section>
+
+    <Card variant="raised">
+      <CardHeader><p className="sensor-label">Connection path</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Vikāsa data pipeline</h2><p className="mt-1 text-xs leading-5 text-surface-500">Only the statuses reported by the existing provider are shown. Wi-Fi and dashboard transport are not independently reported.</p></CardHeader>
+      <CardBody><div className="grid gap-3 md:grid-cols-5 md:items-center">
+        <PipelineNode label="ESP32" detail="Device status from provider" status={esp32Status} icon={<Cpu className="h-5 w-5" />} />
+        <div className="hidden text-center text-surface-500 md:block" aria-hidden="true">↓</div>
+        <PipelineNode label="Wi-Fi" detail="Status unavailable" status="unknown" icon={<WifiOff className="h-5 w-5" />} />
+        <div className="hidden text-center text-surface-500 md:block" aria-hidden="true">↓</div>
+        <PipelineNode label="Flask API" detail="Provider/API boundary" status={apiStatus} icon={<Waves className="h-5 w-5" />} />
+      </div><div className="my-3 hidden justify-center text-surface-500 md:flex" aria-hidden="true">↓</div><div className="grid gap-3 md:grid-cols-2">
+        <PipelineNode label="Database / storage" detail="Firebase status field; migration is not implemented" status={databaseStatus} icon={<Database className="h-5 w-5" />} />
+        <PipelineNode label="Dashboard" detail="Current interface consuming the selected provider" status={apiStatus} icon={<Activity className="h-5 w-5" />} />
+      </div></CardBody>
+    </Card>
+
+    <section className="grid gap-6 lg:grid-cols-2" aria-label="Integration readiness">
+      <Card><CardHeader><p className="sensor-label">Implemented boundary</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Ready / available</h2></CardHeader><CardBody className="space-y-5"><ReadinessItem title="Flask API provider boundary" detail="The frontend can use VITE_API_BASE_URL when configured." /><ReadinessItem title="Provider status reporting" detail="API, ESP32, and Firebase values are displayed from the existing status response." /><ReadinessItem title="Demo provider" detail="Demo readings and status remain clearly labeled as simulated." /></CardBody></Card>
+      <Card><CardHeader><p className="sensor-label">Verification queue</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Pending / not verified</h2></CardHeader><CardBody className="space-y-5"><ReadinessItem title="ESP32 physical connection" detail="No physical device connection is assumed in demo mode." pending /><ReadinessItem title="Firebase deployment connection" detail="Firebase is not claimed as connected; configure it only through backend environment settings." pending /><ReadinessItem title="Supabase and Telegram" detail="Planned future integrations; no migration or alert delivery is implemented here." pending /></CardBody></Card>
+    </section>
+
+    <Card><CardBody className="flex gap-3"><Info className="mt-0.5 h-4 w-4 shrink-0 text-surface-500" aria-hidden="true" /><p className="text-xs leading-5 text-surface-500"><strong className="font-medium text-surface-950">Future architecture:</strong> ESP32 → Flask → Supabase → Dashboard → Telegram. Supabase and Telegram are shown as planned targets only; the current implementation retains its existing Firebase naming and status data.</p></CardBody></Card>
+    </>}
+  </div>
+}
+export { SystemStatusPage as SystemStatus }
+function environmentalTrend(readings: SensorReadingWithMeta[], field: 'temperature_c' | 'humidity_pct' | 'soil_moisture_pct') {
+  return readings
+    .filter((reading) => typeof reading[field] === 'number')
+    .slice()
+    .reverse()
+    .map((reading) => Number(reading[field]))
+}
+function ConditionValue({ label, value, unit, icon }: { label: string; value?: number; unit: string; icon: React.ReactNode }) {
+  return <div className="rounded-xl border border-surface-300 bg-surface-0/50 p-4">
+    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-surface-500">{icon}{label}</div>
+    <p className="mt-4 font-mono text-xl font-semibold text-surface-950">{value === undefined ? 'Not available' : `${value.toFixed(unit === '°C' ? 1 : 0)} ${unit}`}</p>
+  </div>
+}
+function EnvironmentalTrend({ readings, field, label, unit, color }: { readings: SensorReadingWithMeta[]; field: 'temperature_c' | 'humidity_pct' | 'soil_moisture_pct'; label: string; unit: string; color: string }) {
+  const points = environmentalTrend(readings, field)
+  const max = Math.max(...points, 1)
+  const min = Math.min(...points, 0)
+  const range = max - min || 1
+  const path = points.map((point, index) => {
+    const x = points.length === 1 ? 0 : (index / (points.length - 1)) * 100
+    const y = 38 - ((point - min) / range) * 30
+    return `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`
+  }).join(' ')
+  const current = points[points.length - 1]
+
+  return <div className="rounded-xl border border-surface-300 bg-surface-0/50 p-4">
+    <div className="flex items-start justify-between gap-3">
+      <div><p className="sensor-label">{label}</p><p className="mt-2 font-mono text-lg font-semibold text-surface-950">{current === undefined ? 'Not available' : `${current.toFixed(field === 'temperature_c' ? 1 : 0)} ${unit}`}</p></div>
+      <span className="text-xs text-surface-500">{points.length} point{points.length === 1 ? '' : 's'}</span>
+    </div>
+    {points.length >= 2 ? <svg className="mt-4 h-16 w-full" viewBox="0 0 100 42" role="img" aria-label={`${label} environmental trend`}><path d="M 0 38 H 100" stroke="currentColor" className="text-surface-300" strokeWidth="0.5" /><path d={path} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> : <p className="mt-5 text-xs text-surface-500">Not enough data for a trend.</p>}
+  </div>
+}
+function PlantValue({ label, value, accent = 'neutral' }: { label: string; value: string; accent?: 'neutral' | 'red' | 'nir' | 'green' }) {
+  const accents = {
+    neutral: 'border-surface-300 bg-surface-0/50',
+    red: 'border-optical-red-500/20 bg-optical-red-950/15',
+    nir: 'border-optical-nir-500/20 bg-optical-nir-950/15',
+    green: 'border-vikasa-500/20 bg-vikasa-950/15',
+  }
+  return <div className={`rounded-lg border p-3 ${accents[accent]}`}><p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-surface-500">{label}</p><p className="mt-2 break-words font-mono text-sm text-surface-950">{value}</p></div>
+}
+function HistorySummary({ label, value, detail, icon }: { label: string; value: string; detail: string; icon: React.ReactNode }) {
+  return <div className="rounded-xl border border-surface-300 bg-surface-100 p-4"><div className="flex items-center justify-between gap-3"><p className="sensor-label">{label}</p>{icon}</div><p className="mt-3 break-words font-mono text-lg font-semibold text-surface-950">{value}</p><p className="mt-1 text-xs text-surface-500">{detail}</p></div>
+}
 function Loading({ title }: { title: string }) { return <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500" role="status">{title}…</div> }
 function ErrorState() { return <AlertBanner variant="danger" title="Unable to load dashboard">The selected provider returned an error. Check the API configuration or return to demo mode.</AlertBanner> }
 function Empty({ text }: { text: string }) { return <p className="py-8 text-center text-sm text-slate-500">{text}</p> }
-function OpticalMetric({ label, value, suffix = 'ADC', precision }: { label: string; value?: number; suffix?: string; precision?: number }) { const decimals = precision ?? (suffix === 'ADC' ? 0 : label === 'NDVI' ? 3 : 2); return <div className="rounded-xl bg-slate-50 p-4"><p className="text-xs text-slate-500">{label}</p><p className="mt-2 font-mono text-lg text-slate-900">{value === undefined ? 'Not available' : `${value.toFixed(decimals)} ${suffix}`}</p></div> }
-function AlertRow({ alert, expanded = false }: { alert: AlertItem; expanded?: boolean }) { return <div className="flex gap-3 border-b border-slate-100 py-3 last:border-0"><AlertTriangle className={`mt-0.5 h-4 w-4 ${alert.severity === 'critical' ? 'text-red-600' : alert.severity === 'warning' ? 'text-amber-600' : 'text-blue-600'}`} /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold text-slate-900">{alert.title}</p>{alert.plantId && <Badge variant="neutral">{alert.plantId}</Badge>}</div>{expanded && <p className="mt-1 text-sm text-slate-600">{alert.detail}</p>}<p className="mt-1 text-xs text-slate-400">{new Date(alert.timestamp).toLocaleString()}</p></div></div> }
+function OpticalMetric({ label, value, suffix = 'ADC', precision }: { label: string; value?: number; suffix?: string; precision?: number }) { const decimals = precision ?? (suffix === 'ADC' ? 0 : label === 'NDVI' ? 3 : 2); const accent = label.startsWith('RED') ? 'border-optical-red-500/20 bg-optical-red-950/15' : label.startsWith('NIR') ? 'border-optical-nir-500/20 bg-optical-nir-950/15' : 'border-surface-300 bg-surface-0/50'; const labelColor = label.startsWith('RED') ? 'text-optical-red-300' : label.startsWith('NIR') ? 'text-optical-nir-300' : 'text-surface-500'; return <div className={`rounded-xl border p-4 ${accent}`}><p className={`text-xs font-semibold uppercase tracking-[0.14em] ${labelColor}`}>{label}</p><p className="mt-2 font-mono text-lg text-surface-950">{value === undefined ? 'Not available' : `${value.toFixed(decimals)}${suffix ? ` ${suffix}` : ''}`}</p></div> }
+function AlertRow({ alert, expanded = false }: { alert: AlertItem; expanded?: boolean }) {
+  const config = alert.severity === 'critical'
+    ? { icon: ShieldAlert, iconClass: 'text-red-400', border: 'border-l-red-500', surface: 'bg-red-950/10', badge: 'danger', label: 'Critical' }
+    : alert.severity === 'warning'
+      ? { icon: AlertTriangle, iconClass: 'text-amber-400', border: 'border-l-amber-500', surface: 'bg-amber-950/10', badge: 'warning', label: 'Warning' }
+      : { icon: Info, iconClass: 'text-blue-400', border: 'border-l-blue-500', surface: 'bg-blue-950/10', badge: 'info', label: 'Info' }
+  const Icon = config.icon
+  return <div className={`border-l-2 px-6 py-5 transition-colors ${config.border} ${config.surface}`}>
+    <div className="flex items-start gap-4">
+      <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${config.iconClass}`} aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={config.badge as 'danger' | 'warning' | 'info'}>{config.label}</Badge>
+          {alert.plantId && <Badge variant="neutral">{alert.plantId}</Badge>}
+          <span className="ml-auto text-xs text-surface-500">{new Date(alert.timestamp).toLocaleString()}</span>
+        </div>
+        <h3 className="mt-3 text-base font-semibold text-surface-950">{alert.title}</h3>
+        {expanded && <p className="mt-1 max-w-3xl text-sm leading-6 text-surface-500">{alert.detail}</p>}
+        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-surface-500">
+          <span><span className="uppercase tracking-wider text-surface-600">What</span> {alert.title}</span>
+          <span><span className="uppercase tracking-wider text-surface-600">When</span> {new Date(alert.timestamp).toLocaleString()}</span>
+          {alert.plantId && <span><span className="uppercase tracking-wider text-surface-600">Where</span> {alert.plantId}</span>}
+        </div>
+      </div>
+    </div>
+  </div>
+}
 function ReadingTable({ readings, optical = false }: { readings: SensorReadingWithMeta[]; optical?: boolean }) { if (!readings.length) return <Empty text="No readings available." />; return <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead><tr className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500"><th className="px-3 py-3">Time</th><th className="px-3 py-3">Plant</th><th className="px-3 py-3">Health</th><th className="px-3 py-3">Temperature</th><th className="px-3 py-3">Humidity</th>{optical && <><th className="px-3 py-3">Red ADC</th><th className="px-3 py-3">NIR ADC</th><th className="px-3 py-3">NDVI</th></>}</tr></thead><tbody>{readings.map((item) => <tr key={item.reading_id} className="border-b border-slate-100"><td className="whitespace-nowrap px-3 py-3 text-slate-600">{new Date(item.timestamp).toLocaleString()}</td><td className="px-3 py-3 font-medium">{item.plant_id}</td><td className="px-3 py-3">{statusBadge(item.health_label)}</td><td className="px-3 py-3">{displayValue(item.temperature_c, '°C')}</td><td className="px-3 py-3">{displayValue(item.humidity_pct, '%')}</td>{optical && <><td className="px-3 py-3 font-mono">{displayValue(item.red_raw)}</td><td className="px-3 py-3 font-mono">{displayValue(item.nir_raw)}</td><td className="px-3 py-3 font-mono">{hasCalibratedReflectance(item) ? displayValue(item.ndvi) : 'Not available'}</td></>}</tr>)}</tbody></table></div> }

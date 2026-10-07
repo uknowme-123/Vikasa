@@ -6,7 +6,11 @@ import { setDataProvider, createFlaskProvider, demoProvider } from '../../servic
 import type { SystemStatus } from '../../types/sensor'
 
 interface HealthResponse {
-  data: SystemStatus
+  data: {
+    status: 'healthy' | 'degraded' | 'unhealthy'
+    storage_backend: string
+    storage_healthy: boolean
+  }
   success: boolean
   meta: { timestamp: string; version: string; request_id: string | null }
 }
@@ -39,7 +43,13 @@ export function ProviderSwitcher() {
       const response = await fetch(`${apiUrl.trim()}/api/health`)
       if (response.ok) {
         const health = (await response.json()) as HealthResponse
-        setApiHealth(health.data)
+        setApiHealth({
+          api: health.data.status === 'healthy' ? 'connected' : 'disconnected',
+          esp32: 'unknown',
+          storageBackend: health.data.storage_backend,
+          storageHealthy: health.data.storage_healthy,
+          lastSync: null,
+        })
       }
     } catch (err) {
       setConnectionError(err instanceof Error ? err.message : 'Connection failed')
@@ -64,9 +74,15 @@ export function ProviderSwitcher() {
       const response = await fetch(`${apiUrl.trim()}/api/health`)
       if (!response.ok) throw new Error('Health check failed')
       const health = (await response.json()) as HealthResponse
-      setApiHealth(health.data)
+      setApiHealth({
+        api: health.data.status === 'healthy' ? 'connected' : 'disconnected',
+        esp32: 'unknown',
+        storageBackend: health.data.storage_backend,
+        storageHealthy: health.data.storage_healthy,
+        lastSync: null,
+      })
     } catch (err) {
-      setApiHealth({ api: 'disconnected', esp32: 'unknown', firebase: 'unknown', lastSync: null })
+      setApiHealth({ api: 'disconnected', esp32: 'unknown', storageBackend: 'unknown', storageHealthy: false, lastSync: null })
     } finally {
       setCheckingHealth(false)
     }
@@ -123,10 +139,10 @@ export function ProviderSwitcher() {
                           <div className="text-xs text-slate-500">ESP32</div>
                         </div>
                         <div>
-                          <div className={`text-2xl font-bold ${apiHealth.firebase === 'connected' ? 'text-green-600' : apiHealth.firebase === 'disconnected' ? 'text-red-600' : 'text-amber-600'}`}>
-                            {apiHealth.firebase === 'connected' ? '✓' : apiHealth.firebase === 'disconnected' ? '✗' : '?'}
+                          <div className={`text-2xl font-bold ${apiHealth.storageHealthy ? 'text-green-600' : 'text-amber-600'}`}>
+                            {apiHealth.storageHealthy ? '✓' : '?'}
                           </div>
-                          <div className="text-xs text-slate-500">Firebase</div>
+                          <div className="text-xs text-slate-500">Storage</div>
                         </div>
                       </div>
 

@@ -1,6 +1,4 @@
 import { forwardRef, type HTMLAttributes } from 'react'
-import type { SensorReadingWithMeta } from '../../types/sensor'
-
 interface MetricCardProps extends HTMLAttributes<HTMLDivElement> {
   label: string
   value?: number

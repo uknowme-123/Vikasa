@@ -136,8 +136,9 @@ class HealthResponse(BaseModel):
     status: str = Field(..., description="API status: healthy, degraded, or unhealthy")
     version: str = Field(..., description="API version")
     timestamp: datetime = Field(..., description="Check timestamp")
+    storage_backend: str = Field(..., description="Active storage provider")
+    storage_healthy: bool = Field(..., description="Whether the storage provider is healthy")
     storage: dict = Field(..., description="Storage backend status")
-    firebase: Optional[dict] = Field(None, description="Firebase connection status (if configured)")
 
     class Config:
         from_attributes = True

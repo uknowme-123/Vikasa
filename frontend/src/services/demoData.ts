@@ -20,7 +20,7 @@ export const DEMO_READINGS: SensorReadingWithMeta[] = [
   reading({ reading_id: 'DEMO-004', plant_id: 'PLANT-003', session_id: 'SESSION-DEMO-02', timestamp: '2026-10-04T10:05:00Z', stress_type: 'unknown', health_label: 'unknown', temperature_c: 22.8, humidity_pct: 68.4, soil_moisture_pct: 48.5, ambient_light_raw: 2650, notes: 'DEMO DATA — optical module unavailable' }),
 ]
 
-export const DEMO_STATUS: SystemStatus = { api: 'unknown', esp32: 'unknown', firebase: 'unknown', lastSync: null }
+export const DEMO_STATUS: SystemStatus = { api: 'unknown', esp32: 'unknown', storageBackend: 'demo', storageHealthy: false, lastSync: null }
 export const DEMO_ALERTS: AlertItem[] = [
   { id: 'alert-1', severity: 'warning', title: 'Calibration pending', detail: 'PLANT-002 has raw optical counts but no calibrated reflectance.', timestamp: '2026-10-04T10:00:00Z', plantId: 'PLANT-002' },
   { id: 'alert-2', severity: 'info', title: 'Demo mode active', detail: 'All displayed readings are simulated demonstration data.', timestamp: '2026-10-04T09:55:00Z' },

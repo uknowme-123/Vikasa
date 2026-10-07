@@ -42,7 +42,8 @@ export interface PlantSummary {
 export interface SystemStatus {
   api: 'connected' | 'disconnected' | 'unknown'
   esp32: 'connected' | 'disconnected' | 'unknown'
-  firebase: 'connected' | 'disconnected' | 'unknown'
+  storageBackend: string
+  storageHealthy: boolean
   lastSync: string | null
 }
 export interface AlertItem {

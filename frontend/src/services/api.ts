@@ -94,13 +94,15 @@ export function createFlaskProvider(baseUrl: string): DataProvider {
     const status = await get<{
       api: SystemStatus['api']
       esp32: SystemStatus['esp32']
-      firebase: SystemStatus['firebase']
+      storage_backend: string
+      storage_healthy: boolean
       last_sync: string | null
     }>('/api/system/status')
     return {
       api: status.api,
       esp32: status.esp32,
-      firebase: status.firebase,
+      storageBackend: status.storage_backend,
+      storageHealthy: status.storage_healthy,
       lastSync: status.last_sync,
     }
   }

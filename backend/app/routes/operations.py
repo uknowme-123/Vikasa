@@ -66,10 +66,8 @@ def register_operations_routes(storage: StorageService) -> Blueprint:
                 "storage_backend": stats.backend_type,
                 "storage_healthy": stats.is_healthy,
                 "esp32": "unknown",
-                "firebase": "unknown",
                 "last_sync": None,
                 "hardware_note": "ESP32 connectivity has not been verified.",
-                "firebase_note": "Firebase connectivity is not claimed by this endpoint.",
             }
             response = ResponseEnvelope.success_response(
                 status, request_id=correlation_id

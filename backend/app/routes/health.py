@@ -5,7 +5,6 @@ from flask import Blueprint, request
 from backend.app.services.storage import StorageService
 from backend.app.schemas.responses import ResponseEnvelope
 from backend.app.schemas.sensor import HealthResponse
-from backend.app.config import config
 from backend.app.utils.logging import get_logger, get_correlation_id
 
 
@@ -31,33 +30,24 @@ def register_health_routes(storage: StorageService) -> Blueprint:
             logger.error("Storage health check failed", extra={"error": str(e)})
             storage_stats = type("StorageStats", (), {
                 "total_readings": 0,
-                "backend_type": config.storage_backend,
+                "backend_type": "unknown",
                 "is_healthy": False,
                 "last_error": str(e),
                 "details": {},
             })()
 
-        # Firebase status if configured
-        firebase_status = None
-        if config.storage_backend == "firebase":
-            firebase_status = {
-                "configured": True,
-                "project_id": config.firebase_project_id,
-                "connected": storage_stats.is_healthy,
-                "last_error": storage_stats.last_error,
-            }
-
         health = HealthResponse(
             status="healthy" if storage_stats.is_healthy else "degraded",
             version="1.0.0",
             timestamp=datetime.utcnow(),
+            storage_backend=storage_stats.backend_type,
+            storage_healthy=storage_stats.is_healthy,
             storage={
-                "backend": config.storage_backend,
+                "backend": storage_stats.backend_type,
                 "total_readings": storage_stats.total_readings,
                 "healthy": storage_stats.is_healthy,
                 "details": storage_stats.details,
             },
-            firebase=firebase_status,
         )
 
         response = ResponseEnvelope.success_response(health, request_id=correlation_id)

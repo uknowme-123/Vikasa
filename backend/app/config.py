@@ -18,13 +18,18 @@ class Config:
     cors_origin: str = "http://localhost:5173"
 
     # Storage
-    storage_backend: str = "memory"  # "memory" or "firebase"
+    storage_backend: str = "supabase"  # "supabase" (production), "firebase", or "memory"
 
     # Firebase (required when storage_backend=firebase)
     firebase_project_id: Optional[str] = None
     firebase_credentials_path: Optional[str] = None
     firebase_database_url: Optional[str] = None
     firebase_timeout_seconds: float = 10.0
+
+    # Supabase (required when storage_backend=supabase)
+    supabase_url: Optional[str] = None
+    supabase_service_role_key: Optional[str] = None
+    supabase_timeout_seconds: float = 10.0
 
     # Firebase smoke test (only for manual testing)
     firebase_smoke_test: bool = False
@@ -47,11 +52,14 @@ class Config:
             api_port=int(os.getenv("API_PORT", "5000")),
             flask_env=os.getenv("FLASK_ENV", "development"),
             cors_origin=os.getenv("CORS_ORIGIN", "http://localhost:5173"),
-            storage_backend=os.getenv("STORAGE_BACKEND", "memory"),
+            storage_backend=os.getenv("STORAGE_BACKEND", "supabase"),
             firebase_project_id=os.getenv("FIREBASE_PROJECT_ID"),
             firebase_credentials_path=os.getenv("FIREBASE_CREDENTIALS_PATH"),
             firebase_database_url=os.getenv("FIREBASE_DATABASE_URL"),
             firebase_timeout_seconds=float(os.getenv("FIREBASE_TIMEOUT_SECONDS", "10")),
+            supabase_url=os.getenv("SUPABASE_URL"),
+            supabase_service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY"),
+            supabase_timeout_seconds=float(os.getenv("SUPABASE_TIMEOUT_SECONDS", "10")),
             firebase_smoke_test=os.getenv("FIREBASE_SMOKE_TEST", "false").lower() == "true",
             telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
             telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
