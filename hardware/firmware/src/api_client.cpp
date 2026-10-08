@@ -103,6 +103,9 @@ ApiResponseCode api_client_send_reading(ApiClient* client, const SensorReading* 
         http.addHeader("User-Agent", "Vikasa-ESP32/" FIRMWARE_VERSION);
         
         // Send POST request
+#if DEVELOPMENT_MODE || defined(VIKASA_SERIAL_DIAGNOSTICS)
+        Serial.printf("[API] HTTP POST attempt %d/%d\n", attempt + 1, client->max_retries + 1);
+#endif
         int http_code = http.POST((uint8_t*)json_buffer, json_len);
         
         client->last_response_code = http_code;
@@ -120,6 +123,8 @@ ApiResponseCode api_client_send_reading(ApiClient* client, const SensorReading* 
         if (http_code != 201 && response_body.length() > 0) {
             Serial.printf("[API] Response: %s\n", response_body.c_str());
         }
+#elif defined(VIKASA_SERIAL_DIAGNOSTICS)
+        Serial.printf("[API] HTTP result: %d\n", http_code);
 #endif
         
         // Handle response

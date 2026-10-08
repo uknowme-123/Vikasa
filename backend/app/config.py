@@ -1,8 +1,23 @@
 """Vikāsa backend configuration management."""
 
+"""Vikāsa backend configuration management."""
+
 import os
 from dataclasses import dataclass
 from typing import Optional
+
+from dotenv import load_dotenv
+
+load_dotenv(
+    os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        ".env"
+    )
+)
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 @dataclass
@@ -18,7 +33,7 @@ class Config:
     cors_origin: str = "http://localhost:5173"
 
     # Storage
-    storage_backend: str = "supabase"  # "supabase" (production), "firebase", or "memory"
+    storage_backend: str = "memory"  # "memory" (dev/testing), "supabase" (production), or "firebase"
 
     # Firebase (required when storage_backend=firebase)
     firebase_project_id: Optional[str] = None
@@ -52,7 +67,7 @@ class Config:
             api_port=int(os.getenv("API_PORT", "5000")),
             flask_env=os.getenv("FLASK_ENV", "development"),
             cors_origin=os.getenv("CORS_ORIGIN", "http://localhost:5173"),
-            storage_backend=os.getenv("STORAGE_BACKEND", "supabase"),
+            storage_backend=os.getenv("STORAGE_BACKEND", "memory"),
             firebase_project_id=os.getenv("FIREBASE_PROJECT_ID"),
             firebase_credentials_path=os.getenv("FIREBASE_CREDENTIALS_PATH"),
             firebase_database_url=os.getenv("FIREBASE_DATABASE_URL"),

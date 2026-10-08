@@ -47,7 +47,7 @@ bool timestamp_sync_ntp(TimestampManager* tm) {
     tm->sync_attempts++;
     tm->sync_state = TIMESTAMP_SYNCING;
     
-#if DEVELOPMENT_MODE
+#if DEVELOPMENT_MODE || defined(VIKASA_SERIAL_DIAGNOSTICS)
     Serial.printf("[TIMESTAMP] Attempting NTP sync (attempt %d)...\n", tm->sync_attempts);
 #endif
     
@@ -67,11 +67,14 @@ bool timestamp_sync_ntp(TimestampManager* tm) {
 #if DEVELOPMENT_MODE
         Serial.printf("[TIMESTAMP] NTP sync successful. Unix time: %lu, Offset: %ld\n", 
                       (unsigned long)ntp_time, tm->ntp_time_offset);
+#elif defined(VIKASA_SERIAL_DIAGNOSTICS)
+        Serial.printf("[TIMESTAMP] System time read; Unix time: %lu (SNTP completion not independently verified)\n",
+                      (unsigned long)ntp_time);
 #endif
         return true;
     } else {
         tm->sync_state = TIMESTAMP_SYNC_FAILED;
-#if DEVELOPMENT_MODE
+#if DEVELOPMENT_MODE || defined(VIKASA_SERIAL_DIAGNOSTICS)
         Serial.println("[TIMESTAMP] NTP sync failed");
 #endif
         return false;

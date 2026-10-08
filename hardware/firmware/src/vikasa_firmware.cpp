@@ -130,7 +130,7 @@ bool vikasa_measure_once(VikasaFirmware* fw) {
     fw->measurement_in_progress = true;
     fw->last_measurement_ms = millis();
     
-#if DEVELOPMENT_MODE
+#if DEVELOPMENT_MODE || defined(VIKASA_SERIAL_DIAGNOSTICS)
     Serial.println("[FW] Starting measurement cycle...");
 #endif
 
@@ -139,6 +139,9 @@ bool vikasa_measure_once(VikasaFirmware* fw) {
     if (!timestamp_is_synced(&fw->timestamp_mgr)) {
         timestamp_sync_ntp(&fw->timestamp_mgr);
         if (!timestamp_is_synced(&fw->timestamp_mgr)) {
+#if DEVELOPMENT_MODE || defined(VIKASA_SERIAL_DIAGNOSTICS)
+            Serial.println("[FW] Measurement deferred: NTP time not synchronized");
+#endif
             fw->measurement_in_progress = false;
             fw->consecutive_failures++;
             if (fw->on_error) {
@@ -160,7 +163,7 @@ bool vikasa_measure_once(VikasaFirmware* fw) {
         
         if (fw->on_error) fw->on_error(error_msg);
         
-#if DEVELOPMENT_MODE
+#if DEVELOPMENT_MODE || defined(VIKASA_SERIAL_DIAGNOSTICS)
         Serial.printf("[FW] Measurement failed: %s\n", error_msg);
 #endif
         return false;
@@ -239,7 +242,7 @@ bool vikasa_measure_once(VikasaFirmware* fw) {
         
         if (fw->on_error) fw->on_error(vr.error_message);
         
-#if DEVELOPMENT_MODE
+#if DEVELOPMENT_MODE || defined(VIKASA_SERIAL_DIAGNOSTICS)
         Serial.printf("[FW] Payload validation failed: %s\n", vr.error_message);
 #endif
         free_sensor_reading(&reading);
@@ -284,7 +287,7 @@ bool vikasa_measure_once(VikasaFirmware* fw) {
 #endif
         }
     } else {
-#if DEVELOPMENT_MODE
+#if DEVELOPMENT_MODE || defined(VIKASA_SERIAL_DIAGNOSTICS)
         Serial.println("[FW] Wi-Fi not connected, measurement not sent");
 #endif
     }

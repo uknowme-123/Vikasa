@@ -124,8 +124,8 @@ static bool optical_stub_init(OpticalSensorDriver* drv) {
     drv->red_ref_channel = ADS1115_CHANNEL_0;  // Same as red, measured with reference
     drv->nir_ref_channel = ADS1115_CHANNEL_1;  // Same as nir, measured with reference
     
-    drv->red_led_pin = 18;
-    drv->nir_led_pin = 19;
+    drv->red_led_pin = PIN_RED_LED;
+    drv->nir_led_pin = PIN_NIR_LED;
     drv->leds_active_low = false;
     
     // Default calibration (to be determined experimentally)

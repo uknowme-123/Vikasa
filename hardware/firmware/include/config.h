@@ -114,12 +114,14 @@
 #define TIMESTAMP_UNSYNCED_INDICATOR "UNSYNCED"
 #define TIMESTAMP_FORMAT "%Y-%m-%dT%H:%M:%SZ"
 
-// Hardware pin definitions (adjust for your board)
-#define PIN_I2C_SDA 21
-#define PIN_I2C_SCL 22
-#define PIN_DHT22 4
-#define PIN_SOIL_MOISTURE 34
-#define PIN_AMBIENT_LIGHT 35
+// Hardware pin definitions for PCB CUPID GLYPH C3 (ESP32-C3-MINI-1-N4)
+#define PIN_I2C_SDA 4
+#define PIN_I2C_SCL 5
+#define PIN_DHT22 10
+#define PIN_SOIL_MOISTURE 2
+#define PIN_AMBIENT_LIGHT 3
+#define PIN_RED_LED 6
+#define PIN_NIR_LED 7
 #define PIN_ADS1115_ADDR 0x48
 
 // ADS1115 channels for optical sensors (ADS1115 has 4 single-ended channels: 0-3)

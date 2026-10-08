@@ -61,8 +61,8 @@ void wifi_set_credentials(WifiManager* wm, const char* ssid, const char* passwor
 // Start connection attempt
 bool wifi_connect(WifiManager* wm) {
     if (!wm || !wm->credentials_configured) {
-#if DEVELOPMENT_MODE
-        Serial.println("[WIFI] Cannot connect: credentials not configured");
+#if DEVELOPMENT_MODE || defined(VIKASA_SERIAL_DIAGNOSTICS)
+        Serial.println("[WIFI] Connection not started: credentials not configured");
 #endif
         if (wm) {
             wm->state = WIFI_CONNECTION_FAILED;
@@ -83,6 +83,8 @@ bool wifi_connect(WifiManager* wm) {
     
 #if DEVELOPMENT_MODE
     Serial.printf("[WIFI] Connecting to %s (attempt %d)...\n", wm->ssid, wm->connection_attempts);
+#elif defined(VIKASA_SERIAL_DIAGNOSTICS)
+    Serial.printf("[WIFI] Connection attempt %d\n", wm->connection_attempts);
 #endif
     
     WiFi.begin(wm->ssid, wm->password);
@@ -106,6 +108,8 @@ void wifi_loop(WifiManager* wm) {
 #if DEVELOPMENT_MODE
                 Serial.printf("[WIFI] Connected! IP: %s, RSSI: %d dBm\n", 
                               WiFi.localIP().toString().c_str(), WiFi.RSSI());
+#elif defined(VIKASA_SERIAL_DIAGNOSTICS)
+                Serial.println("[WIFI] Connected");
 #endif
                 if (wm->on_connected) {
                     wm->on_connected();
@@ -117,6 +121,8 @@ void wifi_loop(WifiManager* wm) {
 #if DEVELOPMENT_MODE
                 Serial.printf("[WIFI] Connection timeout after %lu ms\n", 
                               now_ms - wm->connect_start_ms);
+#elif defined(VIKASA_SERIAL_DIAGNOSTICS)
+                Serial.println("[WIFI] Connection timed out");
 #endif
                 if (wm->on_connection_failed) {
                     wm->on_connection_failed("Connection timeout");
