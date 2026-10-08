@@ -1,8 +1,8 @@
 // Vikāsa ESP32 Firmware - Hardware Abstraction Implementation
-// Provides stub implementations for development mode
-// Real hardware drivers to be implemented later
 
 #include "hardware_interfaces.h"
+#include <Adafruit_ADS1X15.h>
+#include <DHT.h>
 #include <Wire.h>
 #include <string.h>
 #include <stdio.h>
@@ -12,83 +12,112 @@
 #include <HardwareSerial.h>
 #endif
 
+static Adafruit_ADS1115 ads1115_device;
+static DHT dht22_device(PIN_DHT22, DHT22);
+
 // ============================================================================
-// ADS1115 Stub Implementation
+// ADS1115 Implementation
 // ============================================================================
 
-static bool ads1115_stub_init(Ads1115Driver* drv, uint8_t address) {
+static bool ads1115_init(Ads1115Driver* drv, uint8_t address) {
     if (!drv) return false;
     
     drv->i2c_address = address;
     drv->gain = ADS1115_GAIN_4_096V;
     drv->data_rate = ADS1115_DR_128SPS;
+    drv->last_read_valid = false;
+
+    if (!Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL)) return false;
+    if (!ads1115_device.begin(address, &Wire)) return false;
+
+    ads1115_device.setGain(GAIN_ONE);
+    ads1115_device.setDataRate(RATE_ADS1115_128SPS);
     drv->initialized = true;
     
 #if DEVELOPMENT_MODE
-    Serial.printf("[ADS1115] Stub initialized at address 0x%02X\n", address);
+    Serial.printf("[ADS1115] Initialized at address 0x%02X\n", address);
 #endif
     return true;
 }
 
-static bool ads1115_stub_set_gain(Ads1115Driver* drv, Ads1115Gain gain) {
+static bool ads1115_set_gain(Ads1115Driver* drv, Ads1115Gain gain) {
     if (!drv || !drv->initialized) return false;
+
+    adsGain_t library_gain;
+    switch (gain) {
+        case ADS1115_GAIN_6_144V: library_gain = GAIN_TWOTHIRDS; break;
+        case ADS1115_GAIN_4_096V: library_gain = GAIN_ONE; break;
+        case ADS1115_GAIN_2_048V: library_gain = GAIN_TWO; break;
+        case ADS1115_GAIN_1_024V: library_gain = GAIN_FOUR; break;
+        case ADS1115_GAIN_0_512V: library_gain = GAIN_EIGHT; break;
+        case ADS1115_GAIN_0_256V: library_gain = GAIN_SIXTEEN; break;
+        default: return false;
+    }
+
+    ads1115_device.setGain(library_gain);
     drv->gain = gain;
     return true;
 }
 
-static bool ads1115_stub_set_data_rate(Ads1115Driver* drv, Ads1115DataRate rate) {
+static bool ads1115_set_data_rate(Ads1115Driver* drv, Ads1115DataRate rate) {
     if (!drv || !drv->initialized) return false;
+    if (rate < ADS1115_DR_8SPS || rate > ADS1115_DR_860SPS) return false;
+
+    uint16_t library_rate;
+    switch (rate) {
+        case ADS1115_DR_8SPS: library_rate = RATE_ADS1115_8SPS; break;
+        case ADS1115_DR_16SPS: library_rate = RATE_ADS1115_16SPS; break;
+        case ADS1115_DR_32SPS: library_rate = RATE_ADS1115_32SPS; break;
+        case ADS1115_DR_64SPS: library_rate = RATE_ADS1115_64SPS; break;
+        case ADS1115_DR_128SPS: library_rate = RATE_ADS1115_128SPS; break;
+        case ADS1115_DR_250SPS: library_rate = RATE_ADS1115_250SPS; break;
+        case ADS1115_DR_475SPS: library_rate = RATE_ADS1115_475SPS; break;
+        case ADS1115_DR_860SPS: library_rate = RATE_ADS1115_860SPS; break;
+        default: return false;
+    }
+
+    ads1115_device.setDataRate(library_rate);
     drv->data_rate = rate;
     return true;
 }
 
-static int16_t ads1115_stub_read_single_ended(Ads1115Driver* drv, Ads1115Channel channel) {
-    if (!drv || !drv->initialized) return 0;
-    
-#if DEVELOPMENT_MODE
-    // Return deterministic test values based on channel (ADS1115 has 4 channels: 0-3)
-    static const int16_t test_values[] = {
-        2100,  // Channel 0: Red / Red Reference (measured at different times)
-        3200,  // Channel 1: NIR / NIR Reference (measured at different times)
-        45,    // Channel 2: Red Dark / Soil (shared)
-        52     // Channel 3: NIR Dark / Ambient Light (shared)
-    };
-    
-    if (channel <= ADS1115_CHANNEL_3) {
-        return test_values[channel];
+static int16_t ads1115_read_single_ended(Ads1115Driver* drv, Ads1115Channel channel) {
+    if (!drv) return 0;
+    drv->last_read_valid = false;
+    if (!drv->initialized || channel < ADS1115_CHANNEL_0 || channel > ADS1115_CHANNEL_3) return 0;
+
+    Wire.beginTransmission(drv->i2c_address);
+    if (Wire.endTransmission() != 0) return 0;
+
+    const int16_t raw = ads1115_device.readADC_SingleEnded(static_cast<uint8_t>(channel));
+    if (raw < 0) return 0;
+
+    drv->last_read_valid = true;
+    return raw;
+}
+
+static int16_t ads1115_read_differential(Ads1115Driver* drv, Ads1115Channel channel) {
+    (void)channel;
+    if (drv) drv->last_read_valid = false;
+    return 0;
+}
+
+static float ads1115_voltage_from_raw(int16_t raw) {
+    return ads1115_device.computeVolts(raw);
+}
+
+static float ads1115_read_voltage(Ads1115Driver* drv, Ads1115Channel channel) {
+    const int16_t raw = ads1115_read_single_ended(drv, channel);
+    if (!drv || !drv->last_read_valid) return 0.0f;
+    return ads1115_voltage_from_raw(raw);
+}
+
+static void ads1115_deinit(Ads1115Driver* drv) {
+    if (drv) {
+        drv->initialized = false;
+        drv->last_read_valid = false;
+        Wire.end();
     }
-    return 0;
-#else
-    return 0;
-#endif
-}
-
-static int16_t ads1115_stub_read_differential(Ads1115Driver* drv, Ads1115Channel channel) {
-    (void)drv; (void)channel;
-    return 0;
-}
-
-static float ads1115_stub_read_voltage(Ads1115Driver* drv, Ads1115Channel channel) {
-    if (!drv || !drv->initialized) return 0.0f;
-    
-    int16_t raw = ads1115_stub_read_single_ended(drv, channel);
-    
-    // Convert raw ADC to voltage based on gain
-    float fsr = 4.096f;  // Default gain
-    switch (drv->gain) {
-        case ADS1115_GAIN_6_144V: fsr = 6.144f; break;
-        case ADS1115_GAIN_4_096V: fsr = 4.096f; break;
-        case ADS1115_GAIN_2_048V: fsr = 2.048f; break;
-        case ADS1115_GAIN_1_024V: fsr = 1.024f; break;
-        case ADS1115_GAIN_0_512V: fsr = 0.512f; break;
-        case ADS1115_GAIN_0_256V: fsr = 0.256f; break;
-    }
-    
-    return (raw * fsr) / 32768.0f;
-}
-
-static void ads1115_stub_deinit(Ads1115Driver* drv) {
-    if (drv) drv->initialized = false;
 }
 
 void ads1115_init_default(Ads1115Driver* drv, uint8_t address) {
@@ -98,21 +127,22 @@ void ads1115_init_default(Ads1115Driver* drv, uint8_t address) {
     drv->gain = ADS1115_GAIN_4_096V;
     drv->data_rate = ADS1115_DR_128SPS;
     drv->initialized = false;
+    drv->last_read_valid = false;
     
-    drv->init = ads1115_stub_init;
-    drv->set_gain = ads1115_stub_set_gain;
-    drv->set_data_rate = ads1115_stub_set_data_rate;
-    drv->read_single_ended = ads1115_stub_read_single_ended;
-    drv->read_differential = ads1115_stub_read_differential;
-    drv->read_voltage = ads1115_stub_read_voltage;
-    drv->deinit = ads1115_stub_deinit;
+    drv->init = ads1115_init;
+    drv->set_gain = ads1115_set_gain;
+    drv->set_data_rate = ads1115_set_data_rate;
+    drv->read_single_ended = ads1115_read_single_ended;
+    drv->read_differential = ads1115_read_differential;
+    drv->read_voltage = ads1115_read_voltage;
+    drv->deinit = ads1115_deinit;
 }
 
 // ============================================================================
-// Optical Sensor Stub Implementation
+// Optical Sensor Implementation
 // ============================================================================
 
-static bool optical_stub_init(OpticalSensorDriver* drv) {
+static bool optical_init(OpticalSensorDriver* drv) {
     if (!drv) return false;
     
     // Default channel mapping (ADS1115 has 4 channels: 0-3)
@@ -127,6 +157,11 @@ static bool optical_stub_init(OpticalSensorDriver* drv) {
     drv->red_led_pin = PIN_RED_LED;
     drv->nir_led_pin = PIN_NIR_LED;
     drv->leds_active_low = false;
+
+    pinMode(drv->red_led_pin, OUTPUT);
+    pinMode(drv->nir_led_pin, OUTPUT);
+    digitalWrite(drv->red_led_pin, LOW);
+    digitalWrite(drv->nir_led_pin, LOW);
     
     // Default calibration (to be determined experimentally)
     drv->red_transimpedance_gain = 100000.0f;  // 100 kOhm
@@ -137,12 +172,12 @@ static bool optical_stub_init(OpticalSensorDriver* drv) {
     drv->initialized = true;
     
 #if DEVELOPMENT_MODE
-    Serial.println("[OPTICAL] Stub initialized");
+    Serial.println("[OPTICAL] Initialized");
 #endif
     return true;
 }
 
-static OpticalReading optical_stub_read_channel(OpticalSensorDriver* drv, OpticalChannel channel) {
+static OpticalReading optical_read_channel(OpticalSensorDriver* drv, OpticalChannel channel) {
     OpticalReading reading = {0};
     reading.channel = channel;
     reading.timestamp_ms = millis();
@@ -166,12 +201,20 @@ static OpticalReading optical_stub_read_channel(OpticalSensorDriver* drv, Optica
             return reading;
     }
     
-    int16_t raw = drv->ads1115->read_single_ended(drv->ads1115, ads_channel);
-    float voltage = drv->ads1115->read_voltage(drv->ads1115, ads_channel);
+    const int16_t raw = drv->ads1115->read_single_ended(drv->ads1115, ads_channel);
+    if (!drv->ads1115->last_read_valid) {
+        strncpy(reading.error_message, "ADS1115 read failed", sizeof(reading.error_message) - 1);
+        return reading;
+    }
+    const float voltage = ads1115_voltage_from_raw(raw);
     
     reading.adc_raw = (uint16_t)raw;
     reading.voltage = voltage;
-    reading.current_nA = (voltage / drv->red_transimpedance_gain) * 1e9f;  // Rough estimate
+    const float transimpedance_gain = channel == OPTICAL_NIR || channel == OPTICAL_NIR_DARK ||
+                                      channel == OPTICAL_NIR_REFERENCE
+                                          ? drv->nir_transimpedance_gain
+                                          : drv->red_transimpedance_gain;
+    reading.current_nA = (voltage / transimpedance_gain) * 1e9f;
     reading.valid = true;
     
 #if DEVELOPMENT_MODE
@@ -182,16 +225,19 @@ static OpticalReading optical_stub_read_channel(OpticalSensorDriver* drv, Optica
     return reading;
 }
 
-static bool optical_stub_set_leds(OpticalSensorDriver* drv, bool red_on, bool nir_on) {
+static bool optical_set_leds(OpticalSensorDriver* drv, bool red_on, bool nir_on) {
     if (!drv || !drv->initialized) return false;
-    
+
+    digitalWrite(drv->red_led_pin, (red_on != drv->leds_active_low) ? HIGH : LOW);
+    digitalWrite(drv->nir_led_pin, (nir_on != drv->leds_active_low) ? HIGH : LOW);
+
 #if DEVELOPMENT_MODE
     Serial.printf("[OPTICAL] LEDs: Red=%s, NIR=%s\n", red_on ? "ON" : "OFF", nir_on ? "ON" : "OFF");
 #endif
     return true;
 }
 
-static bool optical_stub_measure_all(OpticalSensorDriver* drv,
+static bool optical_measure_all(OpticalSensorDriver* drv,
                                      OpticalReading* red_raw,
                                      OpticalReading* nir_raw,
                                      OpticalReading* red_dark,
@@ -203,18 +249,26 @@ static bool optical_stub_measure_all(OpticalSensorDriver* drv,
     // Sequence: Dark → Reference → Sample (with LEDs on)
     
     // 1. Dark readings (LEDs off)
-    drv->set_leds(drv, false, false);
+    if (!drv->set_leds(drv, false, false)) return false;
     delay(10);  // Settling time
     
     if (red_dark) *red_dark = drv->read_channel(drv, OPTICAL_RED_DARK);
     if (nir_dark) *nir_dark = drv->read_channel(drv, OPTICAL_NIR_DARK);
+    if ((red_dark && !red_dark->valid) || (nir_dark && !nir_dark->valid)) {
+        drv->set_leds(drv, false, false);
+        return false;
+    }
     
     // 2. Reference readings (LEDs on, reference standard in place)
-    drv->set_leds(drv, true, true);
+    if (!drv->set_leds(drv, true, true)) return false;
     delay(50);  // LED warm-up + settling
     
     if (red_ref) *red_ref = drv->read_channel(drv, OPTICAL_RED_REFERENCE);
     if (nir_ref) *nir_ref = drv->read_channel(drv, OPTICAL_NIR_REFERENCE);
+    if ((red_ref && !red_ref->valid) || (nir_ref && !nir_ref->valid)) {
+        drv->set_leds(drv, false, false);
+        return false;
+    }
     
     // 3. Sample readings (LEDs on, leaf in place)
     // In real implementation, this would require moving the reference standard
@@ -223,12 +277,13 @@ static bool optical_stub_measure_all(OpticalSensorDriver* drv,
     if (nir_raw) *nir_raw = drv->read_channel(drv, OPTICAL_NIR);
     
     // Turn off LEDs
-    drv->set_leds(drv, false, false);
+    if (!drv->set_leds(drv, false, false)) return false;
+    if ((red_raw && !red_raw->valid) || (nir_raw && !nir_raw->valid)) return false;
     
     return true;
 }
 
-static void optical_stub_deinit(OpticalSensorDriver* drv) {
+static void optical_deinit(OpticalSensorDriver* drv) {
     if (drv) {
         drv->set_leds(drv, false, false);
         drv->initialized = false;
@@ -241,11 +296,11 @@ void optical_sensor_init_default(OpticalSensorDriver* drv, Ads1115Driver* ads) {
     drv->ads1115 = ads;
     drv->initialized = false;
     
-    drv->init = optical_stub_init;
-    drv->read_channel = optical_stub_read_channel;
-    drv->set_leds = optical_stub_set_leds;
-    drv->measure_all = optical_stub_measure_all;
-    drv->deinit = optical_stub_deinit;
+    drv->init = optical_init;
+    drv->read_channel = optical_read_channel;
+    drv->set_leds = optical_set_leds;
+    drv->measure_all = optical_measure_all;
+    drv->deinit = optical_deinit;
 }
 
 // ============================================================================
@@ -326,10 +381,10 @@ ReflectanceResult calculate_reflectance(
 }
 
 // ============================================================================
-// DHT22 Stub Implementation
+// DHT22 Implementation
 // ============================================================================
 
-static Dht22Reading dht22_stub_read(Dht22Driver* drv) {
+static Dht22Reading dht22_read(Dht22Driver* drv) {
     Dht22Reading reading = {0};
     reading.timestamp_ms = millis();
     reading.valid = false;
@@ -339,28 +394,32 @@ static Dht22Reading dht22_stub_read(Dht22Driver* drv) {
         return reading;
     }
     
-#if DEVELOPMENT_MODE
-    reading.temperature_c = 24.5f;
-    reading.humidity_pct = 62.3f;
+    reading.humidity_pct = dht22_device.readHumidity();
+    reading.temperature_c = dht22_device.readTemperature();
+    if (isnan(reading.humidity_pct) || isnan(reading.temperature_c) ||
+        reading.humidity_pct < HUMIDITY_MIN || reading.humidity_pct > HUMIDITY_MAX ||
+        reading.temperature_c < TEMP_MIN || reading.temperature_c > TEMP_MAX) {
+        strncpy(reading.error_message, "DHT22 returned invalid data", sizeof(reading.error_message) - 1);
+        return reading;
+    }
+
     reading.valid = true;
-#else
-    strncpy(reading.error_message, "Real driver not implemented", sizeof(reading.error_message) - 1);
-#endif
     
     return reading;
 }
 
-static bool dht22_stub_init(Dht22Driver* drv, int pin) {
-    if (!drv) return false;
+static bool dht22_init(Dht22Driver* drv, int pin) {
+    if (!drv || pin != PIN_DHT22) return false;
     drv->pin = pin;
+    dht22_device.begin();
     drv->initialized = true;
 #if DEVELOPMENT_MODE
-    Serial.printf("[DHT22] Stub initialized on pin %d\n", pin);
+    Serial.printf("[DHT22] Initialized on pin %d\n", pin);
 #endif
     return true;
 }
 
-static void dht22_stub_deinit(Dht22Driver* drv) {
+static void dht22_deinit(Dht22Driver* drv) {
     if (drv) drv->initialized = false;
 }
 
@@ -370,16 +429,16 @@ void dht22_init_default(Dht22Driver* drv, int pin) {
     drv->pin = pin;
     drv->initialized = false;
     
-    drv->init = dht22_stub_init;
-    drv->read = dht22_stub_read;
-    drv->deinit = dht22_stub_deinit;
+    drv->init = dht22_init;
+    drv->read = dht22_read;
+    drv->deinit = dht22_deinit;
 }
 
 // ============================================================================
-// Soil Moisture Stub Implementation
+// Soil Moisture Implementation
 // ============================================================================
 
-static SoilMoistureReading soil_stub_read(SoilMoistureDriver* drv) {
+static SoilMoistureReading soil_read(SoilMoistureDriver* drv) {
     SoilMoistureReading reading = {0};
     reading.timestamp_ms = millis();
     reading.valid = false;
@@ -389,45 +448,62 @@ static SoilMoistureReading soil_stub_read(SoilMoistureDriver* drv) {
         return reading;
     }
     
-#if DEVELOPMENT_MODE
-    reading.raw_adc = 1850;
-    // Simple linear calibration
-    if (drv->wet_raw > drv->dry_raw) {
-        float range = drv->wet_raw - drv->dry_raw;
-        reading.moisture_pct = 100.0f * (reading.raw_adc - drv->dry_raw) / range;
-        if (reading.moisture_pct < 0) reading.moisture_pct = 0;
-        if (reading.moisture_pct > 100) reading.moisture_pct = 100;
+    if (drv->use_ads1115) {
+        if (!drv->ads1115 || !drv->ads1115->read_single_ended) {
+            strncpy(reading.error_message, "Soil ADS1115 is not configured", sizeof(reading.error_message) - 1);
+            return reading;
+        }
+        const int16_t raw = drv->ads1115->read_single_ended(drv->ads1115, drv->ads_channel);
+        if (!drv->ads1115->last_read_valid || raw < 0) {
+            strncpy(reading.error_message, "Soil ADS1115 read failed", sizeof(reading.error_message) - 1);
+            return reading;
+        }
+        reading.raw_adc = static_cast<uint16_t>(raw);
+    } else {
+        const int raw = analogRead(drv->adc_pin);
+        if (raw < 0 || raw > 4095) {
+            strncpy(reading.error_message, "Soil GPIO ADC read failed", sizeof(reading.error_message) - 1);
+            return reading;
+        }
+        reading.raw_adc = static_cast<uint16_t>(raw);
     }
+
+    if (drv->dry_raw == drv->wet_raw) {
+        strncpy(reading.error_message, "Soil calibration points are identical", sizeof(reading.error_message) - 1);
+        return reading;
+    }
+
+    const float calibrated = 100.0f * (reading.raw_adc - drv->dry_raw) /
+                             (static_cast<float>(drv->wet_raw) - drv->dry_raw);
+    reading.moisture_pct = fmaxf(0.0f, fminf(100.0f, calibrated));
     reading.valid = true;
-#else
-    strncpy(reading.error_message, "Real driver not implemented", sizeof(reading.error_message) - 1);
-#endif
     
     return reading;
 }
 
-static bool soil_stub_init(SoilMoistureDriver* drv) {
+static bool soil_init(SoilMoistureDriver* drv) {
     if (!drv) return false;
-    drv->initialized = true;
+    if (drv->use_ads1115 && (!drv->ads1115 || !drv->ads1115->initialized)) return false;
     
-    // Default calibration points (to be determined)
     drv->dry_raw = 3000;
     drv->wet_raw = 1000;
+    if (!drv->use_ads1115) pinMode(drv->adc_pin, INPUT);
+    drv->initialized = true;
     
 #if DEVELOPMENT_MODE
-    Serial.printf("[SOIL] Stub initialized (dry=%u, wet=%u)\n", drv->dry_raw, drv->wet_raw);
+    Serial.printf("[SOIL] Initialized (dry=%u, wet=%u)\n", drv->dry_raw, drv->wet_raw);
 #endif
     return true;
 }
 
-static void soil_stub_calibrate(SoilMoistureDriver* drv, uint16_t dry, uint16_t wet) {
+static void soil_calibrate(SoilMoistureDriver* drv, uint16_t dry, uint16_t wet) {
     if (drv) {
         drv->dry_raw = dry;
         drv->wet_raw = wet;
     }
 }
 
-static void soil_stub_deinit(SoilMoistureDriver* drv) {
+static void soil_deinit(SoilMoistureDriver* drv) {
     if (drv) drv->initialized = false;
 }
 
@@ -438,17 +514,17 @@ void soil_moisture_init_default(SoilMoistureDriver* drv, int pin) {
     drv->use_ads1115 = false;
     drv->initialized = false;
     
-    drv->init = soil_stub_init;
-    drv->read = soil_stub_read;
-    drv->calibrate = soil_stub_calibrate;
-    drv->deinit = soil_stub_deinit;
+    drv->init = soil_init;
+    drv->read = soil_read;
+    drv->calibrate = soil_calibrate;
+    drv->deinit = soil_deinit;
 }
 
 // ============================================================================
-// Ambient Light Stub Implementation
+// Ambient Light Implementation
 // ============================================================================
 
-static AmbientLightReading ambient_stub_read(AmbientLightDriver* drv) {
+static AmbientLightReading ambient_read(AmbientLightDriver* drv) {
     AmbientLightReading reading = {0};
     reading.timestamp_ms = millis();
     reading.valid = false;
@@ -458,31 +534,48 @@ static AmbientLightReading ambient_stub_read(AmbientLightDriver* drv) {
         return reading;
     }
     
-#if DEVELOPMENT_MODE
-    reading.raw_adc = 2900;
+    if (drv->use_ads1115) {
+        if (!drv->ads1115 || !drv->ads1115->read_single_ended) {
+            strncpy(reading.error_message, "Ambient-light ADS1115 is not configured", sizeof(reading.error_message) - 1);
+            return reading;
+        }
+        const int16_t raw = drv->ads1115->read_single_ended(drv->ads1115, drv->ads_channel);
+        if (!drv->ads1115->last_read_valid || raw < 0) {
+            strncpy(reading.error_message, "Ambient-light ADS1115 read failed", sizeof(reading.error_message) - 1);
+            return reading;
+        }
+        reading.raw_adc = static_cast<uint16_t>(raw);
+    } else {
+        const int raw = analogRead(drv->adc_pin);
+        if (raw < 0 || raw > 4095) {
+            strncpy(reading.error_message, "Ambient-light GPIO ADC read failed", sizeof(reading.error_message) - 1);
+            return reading;
+        }
+        reading.raw_adc = static_cast<uint16_t>(raw);
+    }
+
     if (drv->lux_per_adc > 0) {
         reading.lux = reading.raw_adc * drv->lux_per_adc;
     }
     reading.valid = true;
-#else
-    strncpy(reading.error_message, "Real driver not implemented", sizeof(reading.error_message) - 1);
-#endif
     
     return reading;
 }
 
-static bool ambient_stub_init(AmbientLightDriver* drv) {
+static bool ambient_init(AmbientLightDriver* drv) {
     if (!drv) return false;
+    if (drv->use_ads1115 && (!drv->ads1115 || !drv->ads1115->initialized)) return false;
     drv->initialized = true;
-    drv->lux_per_adc = 1.0f;  // Placeholder
+    drv->lux_per_adc = 1.0f;
+    if (!drv->use_ads1115) pinMode(drv->adc_pin, INPUT);
     
 #if DEVELOPMENT_MODE
-    Serial.println("[AMBIENT] Stub initialized");
+    Serial.println("[AMBIENT] Initialized");
 #endif
     return true;
 }
 
-static void ambient_stub_deinit(AmbientLightDriver* drv) {
+static void ambient_deinit(AmbientLightDriver* drv) {
     if (drv) drv->initialized = false;
 }
 
@@ -493,43 +586,49 @@ void ambient_light_init_default(AmbientLightDriver* drv, int pin) {
     drv->use_ads1115 = false;
     drv->initialized = false;
     
-    drv->init = ambient_stub_init;
-    drv->read = ambient_stub_read;
-    drv->deinit = ambient_stub_deinit;
+    drv->init = ambient_init;
+    drv->read = ambient_read;
+    drv->deinit = ambient_deinit;
 }
 
 // ============================================================================
 // Hardware Manager Implementation
 // ============================================================================
 
-static bool hw_mgr_stub_init(HardwareManager* hm) {
+static bool hw_mgr_init(HardwareManager* hm) {
     if (!hm) return false;
     
-    // Initialize all sub-drivers
     ads1115_init_default(&hm->ads1115, PIN_ADS1115_ADDR);
-    if (!hm->ads1115.init(&hm->ads1115, hm->ads1115.i2c_address)) return false;
+    const bool ads_ready = hm->ads1115.init(&hm->ads1115, hm->ads1115.i2c_address) &&
+                           hm->ads1115.set_gain(&hm->ads1115, ADS1115_GAIN) &&
+                           hm->ads1115.set_data_rate(&hm->ads1115, ADS1115_DR_128SPS);
     
     optical_sensor_init_default(&hm->optical, &hm->ads1115);
-    if (!hm->optical.init(&hm->optical)) return false;
+    const bool optical_ready = hm->optical.init(&hm->optical);
     
     dht22_init_default(&hm->dht22, PIN_DHT22);
-    if (!hm->dht22.init(&hm->dht22, hm->dht22.pin)) return false;
+    const bool dht_ready = hm->dht22.init(&hm->dht22, hm->dht22.pin);
     
     soil_moisture_init_default(&hm->soil, PIN_SOIL_MOISTURE);
-    if (!hm->soil.init(&hm->soil)) return false;
+    const bool soil_ready = hm->soil.init(&hm->soil);
     
     ambient_light_init_default(&hm->ambient, PIN_AMBIENT_LIGHT);
-    if (!hm->ambient.init(&hm->ambient)) return false;
+    const bool ambient_ready = hm->ambient.init(&hm->ambient);
     
     hm->initialized = true;
     
-#if DEVELOPMENT_MODE
-    Serial.println("[HW_MGR] All stub drivers initialized");
+#if DEVELOPMENT_MODE || defined(VIKASA_SERIAL_DIAGNOSTICS)
+    Serial.printf("[HW_MGR] Init ADS=%s optical=%s DHT22=%s soil=%s ambient=%s\n",
+                  ads_ready ? "OK" : "FAILED",
+                  optical_ready ? "OK" : "FAILED",
+                  dht_ready ? "OK" : "FAILED",
+                  soil_ready ? "OK" : "FAILED",
+                  ambient_ready ? "OK" : "FAILED");
 #endif
     return true;
 }
 
-static SensorSuiteReading hw_mgr_stub_read_all(HardwareManager* hm) {
+static SensorSuiteReading hw_mgr_read_all(HardwareManager* hm) {
     SensorSuiteReading reading = {0};
     reading.timestamp_ms = millis();
     reading.valid = false;
@@ -539,37 +638,54 @@ static SensorSuiteReading hw_mgr_stub_read_all(HardwareManager* hm) {
         return reading;
     }
     
-    // Read optical measurements (full sequence)
-    if (!hm->optical.measure_all(&hm->optical,
-                                 &reading.red_raw, &reading.nir_raw,
-                                 &reading.red_dark, &reading.nir_dark,
-                                 &reading.red_reference, &reading.nir_reference)) {
-        strncpy(reading.error_message, "Optical measurement failed", sizeof(reading.error_message) - 1);
-        return reading;
-    }
+    const bool optical_read_ok = hm->optical.measure_all(
+        &hm->optical,
+        &reading.red_raw, &reading.nir_raw,
+        &reading.red_dark, &reading.nir_dark,
+        &reading.red_reference, &reading.nir_reference);
     
-    // Calculate reflectance
     reading.reflectance = calculate_reflectance(
         &reading.red_raw, &reading.nir_raw,
         &reading.red_dark, &reading.nir_dark,
         &reading.red_reference, &reading.nir_reference
     );
-    
-    if (!reading.reflectance.valid) {
-        strncpy(reading.error_message, reading.reflectance.error_message, sizeof(reading.error_message) - 1);
-        return reading;
+
+    // Environmental sensors are optional in the payload; retain their individual validity.
+    if (hm->dht22.initialized) {
+        reading.dht22 = hm->dht22.read(&hm->dht22);
+    } else {
+        strncpy(reading.dht22.error_message, "DHT22 initialization failed",
+                sizeof(reading.dht22.error_message) - 1);
     }
-    
-    // Read environmental sensors
-    reading.dht22 = hm->dht22.read(&hm->dht22);
-    reading.soil = hm->soil.read(&hm->soil);
-    reading.ambient = hm->ambient.read(&hm->ambient);
-    
-    reading.valid = true;
+    if (hm->soil.initialized) {
+        reading.soil = hm->soil.read(&hm->soil);
+    } else {
+        strncpy(reading.soil.error_message, "Soil sensor initialization failed",
+                sizeof(reading.soil.error_message) - 1);
+    }
+    if (hm->ambient.initialized) {
+        reading.ambient = hm->ambient.read(&hm->ambient);
+    } else {
+        strncpy(reading.ambient.error_message, "Ambient-light initialization failed",
+                sizeof(reading.ambient.error_message) - 1);
+    }
+
+    reading.valid = optical_read_ok || reading.red_raw.valid || reading.nir_raw.valid ||
+                    reading.red_dark.valid || reading.nir_dark.valid ||
+                    reading.red_reference.valid || reading.nir_reference.valid ||
+                    reading.dht22.valid || reading.soil.valid || reading.ambient.valid;
+    if (!reading.valid) {
+        snprintf(reading.error_message, sizeof(reading.error_message),
+                 "No valid sensor readings (optical: %s; DHT22: %s; soil: %s; ambient: %s)",
+                 reading.reflectance.error_message,
+                 reading.dht22.error_message,
+                 reading.soil.error_message,
+                 reading.ambient.error_message);
+    }
     return reading;
 }
 
-static void hw_mgr_stub_deinit(HardwareManager* hm) {
+static void hw_mgr_deinit(HardwareManager* hm) {
     if (!hm) return;
     
     hm->optical.deinit(&hm->optical);
@@ -587,9 +703,9 @@ void hardware_manager_init_default(HardwareManager* hm) {
     memset(hm, 0, sizeof(HardwareManager));
     hm->initialized = false;
     
-    hm->init = hw_mgr_stub_init;
-    hm->read_all = hw_mgr_stub_read_all;
-    hm->deinit = hw_mgr_stub_deinit;
+    hm->init = hw_mgr_init;
+    hm->read_all = hw_mgr_read_all;
+    hm->deinit = hw_mgr_deinit;
 }
 
 // ============================================================================

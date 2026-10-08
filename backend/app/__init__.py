@@ -39,7 +39,11 @@ def create_app() -> Flask:
     logger = setup_logging()
 
     # Configure CORS
-    CORS(app, origins=[config.cors_origin], supports_credentials=True)
+    CORS(
+        app,
+        origins=[config.cors_origin, "http://127.0.0.1:5173"],
+        supports_credentials=True,
+    )
 
     # Register error handlers
     register_error_handlers(app)

@@ -27,7 +27,8 @@ enum ApiResponseCode {
     API_NETWORK_ERROR = -2,     // Network failure
     API_NOT_CONNECTED = -3,     // Wi-Fi not connected
     API_SERIALIZE_ERROR = -4,   // JSON serialization failed
-    API_INVALID_CONFIG = -5     // Invalid configuration
+    API_INVALID_CONFIG = -5,    // Invalid configuration
+    API_MEMORY_ERROR = -6       // Buffer allocation failed
 };
 
 // API client state

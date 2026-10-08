@@ -1,10 +1,10 @@
 import { forwardRef, type HTMLAttributes } from 'react'
 interface MetricCardProps extends HTMLAttributes<HTMLDivElement> {
   label: string
-  value?: number
+  value?: number | null
   unit?: string
   precision?: number
-  trend?: number[]
+  trend?: (number | null)[]
   iconColor?: 'green' | 'red' | 'blue' | 'amber' | 'violet'
   icon?: React.ReactNode
   status?: 'healthy' | 'warning' | 'critical' | 'unknown'
@@ -25,13 +25,14 @@ const statusClasses = {
   unknown: 'text-surface-500',
 }
 
-const fmt = (value?: number, unit = '', precision = 1) =>
-  value === undefined ? '—' : `${value.toFixed(precision)}${unit ? ` ${unit}` : ''}`
+const fmt = (value?: number | null, unit = '', precision = 1) =>
+  value == null ? '—' : `${value.toFixed(precision)}${unit ? ` ${unit}` : ''}`
 
-const Sparkline = ({ data, color = 'currentColor' }: { data?: number[]; color?: string }) => {
-  if (!data || data.length < 2) return null
-  const max = Math.max(...data, 1)
-  const min = Math.min(...data, 0)
+const Sparkline = ({ data, color = 'currentColor' }: { data?: (number | null)[]; color?: string }) => {
+  const points = data?.filter((point): point is number => typeof point === 'number' && Number.isFinite(point))
+  if (!points || points.length < 2) return null
+  const max = Math.max(...points, 1)
+  const min = Math.min(...points, 0)
   const range = max - min || 1
 
   return (
@@ -43,9 +44,9 @@ const Sparkline = ({ data, color = 'currentColor' }: { data?: number[]; color?: 
         </linearGradient>
       </defs>
       <path
-        d={data
+        d={points
           .map((point, i) => {
-            const x = (i / (data.length - 1)) * 100
+            const x = (i / (points.length - 1)) * 100
             const y = 30 - ((point - min) / range) * 28 - 1
             return `${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`
           })
@@ -57,9 +58,9 @@ const Sparkline = ({ data, color = 'currentColor' }: { data?: number[]; color?: 
         strokeLinejoin="round"
       />
       <path
-        d={data
+        d={points
           .map((point, i) => {
-            const x = (i / (data.length - 1)) * 100
+            const x = (i / (points.length - 1)) * 100
             const y = 30 - ((point - min) / range) * 28 - 1
             return `${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`
           })

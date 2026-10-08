@@ -71,6 +71,7 @@ struct Ads1115Driver {
     Ads1115Gain gain;
     Ads1115DataRate data_rate;
     bool initialized;
+    bool last_read_valid;
     
     // Function pointers for hardware-specific implementation
     bool (*init)(struct Ads1115Driver* drv, uint8_t address);

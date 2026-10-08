@@ -226,9 +226,7 @@ bool vikasa_measure_once(VikasaFirmware* fw) {
     }
     if (hw_reading.soil.valid) {
         set_soil_moisture_raw(&reading, hw_reading.soil.raw_adc);
-        if (hw_reading.soil.moisture_pct > 0) {
-            set_soil_moisture_pct(&reading, hw_reading.soil.moisture_pct);
-        }
+        set_soil_moisture_pct(&reading, hw_reading.soil.moisture_pct);
     }
     if (hw_reading.ambient.valid) {
         set_ambient_light_raw(&reading, hw_reading.ambient.raw_adc);

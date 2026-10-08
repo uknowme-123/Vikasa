@@ -137,8 +137,8 @@
 #define ADS1115_CHANNEL_SOIL 2  // Shared with RED_DARK - use mux or separate ADC
 #define ADS1115_CHANNEL_LIGHT 3  // Shared with NIR_DARK - use mux or separate ADC
 
-// ADC gain setting for ADS1115 (ADS1115_REG_CONFIG_PGA_4_096V = 4.096V range)
-#define ADS1115_GAIN ADS1115_REG_CONFIG_PGA_4_096V
+// ADC gain setting for ADS1115 (4.096V full-scale range)
+#define ADS1115_GAIN ADS1115_GAIN_4_096V
 
 // Logging
 #define LOG_LEVEL_INFO 1

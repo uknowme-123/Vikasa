@@ -9,44 +9,16 @@ import { Card, CardBody, CardHeader } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { MetricCard } from '../components/ui/MetricCard'
 import { StatusPill } from '../components/ui/StatusPill'
+import { NDVICard } from '../components/ui/NDVICard'
+import { OpticalAnalysisCard } from '../components/ui/OpticalAnalysisCard'
+import { PlantStatusCard } from '../components/ui/PlantStatusCard'
+import { StressAnalysisCard } from '../components/ui/StressAnalysisCard'
+import { RecommendationCard } from '../components/ui/RecommendationCard'
+import { AlertCard } from '../components/ui/AlertCard'
 
-const fmt = (value?: number, unit = '') => value === undefined ? 'Not available' : `${value.toFixed(unit === 'NDVI' ? 3 : 1)}${unit && unit !== 'NDVI' ? ` ${unit}` : ''}`
 const latest = (items: SensorReadingWithMeta[]) => [...items].sort((a, b) => +new Date(b.timestamp) - +new Date(a.timestamp))[0]
 function DemoNotice() { return <AlertBanner variant="warning" title="DEMO DATA">Simulated values are shown for interface demonstration only. No physical hardware, Firebase project, or validated ML result is connected.</AlertBanner> }
 function statusBadge(value?: string | null) { return <Badge variant={value === 'healthy' || value === 'connected' ? 'success' : value === 'severe' || value === 'disconnected' ? 'danger' : value === 'unknown' ? 'neutral' : 'warning'}>{value ?? 'Not available'}</Badge> }
-function overviewTrend(readings: SensorReadingWithMeta[], field: keyof SensorReadingWithMeta) {
-  return readings
-    .filter((reading) => typeof reading[field] === 'number')
-    .slice()
-    .reverse()
-    .map((reading) => Number(reading[field]))
-}
-function OverviewTrend({ readings, field, label, unit, color }: { readings: SensorReadingWithMeta[]; field: keyof SensorReadingWithMeta; label: string; unit: string; color: string }) {
-  const points = overviewTrend(readings, field)
-  const max = Math.max(...points, 1)
-  const min = Math.min(...points, 0)
-  const range = max - min || 1
-  const path = points.map((point, index) => {
-    const x = points.length === 1 ? 0 : (index / (points.length - 1)) * 100
-    const y = 38 - ((point - min) / range) * 30
-    return `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`
-  }).join(' ')
-  const current = points[points.length - 1]
-
-  return <div className="rounded-xl border border-surface-300 bg-surface-0/60 p-4">
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <p className="sensor-label">{label}</p>
-        <p className="mt-2 font-mono text-lg font-semibold text-surface-950">{current === undefined ? 'Not available' : `${current.toFixed(field === 'ndvi' ? 3 : 1)} ${unit}`}</p>
-      </div>
-      <Activity className="h-4 w-4 text-surface-500" aria-hidden="true" />
-    </div>
-    {points.length >= 2 ? <svg className="mt-4 h-16 w-full" viewBox="0 0 100 42" role="img" aria-label={`${label} trend`}>
-      <path d="M 0 38 H 100" stroke="currentColor" className="text-surface-300" strokeWidth="0.5" />
-      <path d={path} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg> : <p className="mt-5 text-xs text-surface-500">Not enough data for a trend.</p>}
-  </div>
-}
 function overviewStatus(value: 'connected' | 'disconnected' | 'unknown' | undefined) {
   return value ?? 'unknown'
 }
@@ -55,119 +27,142 @@ export function Overview() {
   const { data: plants = [] } = usePlants()
   const { data: alerts = [] } = useAlerts()
   const { data: systemStatus } = useStatus()
+  const providerMode = getDataProvider().mode
   const item = latest(readings)
   const calibrated = item ? hasCalibratedReflectance(item) : false
   const ndvi = calibrated ? item?.ndvi : undefined
-  const temperatureTrend = overviewTrend(readings, 'temperature_c')
-  const humidityTrend = overviewTrend(readings, 'humidity_pct')
-  const moistureTrend = overviewTrend(readings, 'soil_moisture_pct')
-  const ndviTrend = readings.filter(hasCalibratedReflectance).map((reading) => reading.ndvi).filter((value): value is number => value !== undefined).reverse()
 
   if (isLoading) return <Loading title="Loading overview" />
   if (error) return <ErrorState />
 
-  return <div className="space-y-6">
-    <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+  return <div className="space-y-7">
+    <div className="flex flex-col justify-between gap-4 border-b border-surface-300/60 pb-5 lg:flex-row lg:items-end">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-vikasa-400">Plant intelligence / live view</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-surface-950 sm:text-4xl">Overview</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-surface-500">A focused readout of plant condition, optical sensing, and environmental context.</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-vikasa-400">Plant intelligence / overview</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-surface-950 sm:text-4xl">Plant overview</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-surface-600">A clear view of plant health, optical response, and growing conditions.</p>
       </div>
-      <div className="flex items-center gap-2 text-xs text-surface-500">
-        <Clock3 className="h-4 w-4" aria-hidden="true" />
-        <span>{item ? `Latest reading ${new Date(item.timestamp).toLocaleString()}` : 'Awaiting sensor readings'}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={providerMode === 'demo' ? 'warning' : 'info'}>{providerMode === 'demo' ? 'Demo data' : 'API data'}</Badge>
+        <StatusPill label="API" status={overviewStatus(systemStatus?.api)} size="sm" />
+        <StatusPill label="GLYPH C3" status={overviewStatus(systemStatus?.esp32)} size="sm" />
       </div>
     </div>
 
-    <DemoNotice />
+    {providerMode === 'demo' && <DemoNotice />}
 
-    <section aria-labelledby="overview-metrics" className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 id="overview-metrics" className="text-sm font-semibold uppercase tracking-[0.18em] text-surface-500">Current measurements</h2>
-        <span className="text-xs text-surface-500">{readings.length} available reading{readings.length === 1 ? '' : 's'}</span>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Latest NDVI" value={ndvi} unit="" precision={3} trend={ndviTrend} iconColor="green" icon={<Leaf className="h-5 w-5" />} status={ndvi === undefined ? 'unknown' : 'healthy'} />
-        <MetricCard label="Temperature" value={item?.temperature_c} unit="°C" trend={temperatureTrend} iconColor="amber" icon={<Thermometer className="h-5 w-5" />} />
-        <MetricCard label="Humidity" value={item?.humidity_pct} unit="%" trend={humidityTrend} iconColor="blue" icon={<Droplets className="h-5 w-5" />} />
-        <MetricCard label="Soil moisture" value={item?.soil_moisture_pct} unit="%" trend={moistureTrend} iconColor="green" icon={<Gauge className="h-5 w-5" />} />
-      </div>
-    </section>
-
-    <section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]" aria-label="Current monitoring">
-      <Card variant="raised">
-        <CardHeader className="flex items-center justify-between">
-          <div>
-            <p className="sensor-label">Monitoring focus</p>
-            <h2 className="mt-1 text-lg font-semibold text-surface-950">Latest plant state</h2>
-          </div>
-          <StatusPill label="reading" status={item ? 'connected' : 'unknown'} size="sm" />
-        </CardHeader>
-        <CardBody>
-          {item ? <div className="grid gap-6 lg:grid-cols-[1fr_auto]">
-            <div>
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="font-mono text-2xl font-semibold text-surface-950">{item.plant_id}</span>
-                {statusBadge(item.health_label)}
-              </div>
-              <p className="mt-2 text-sm text-surface-500">{item.species ?? 'Species unavailable'} · session {item.session_id}</p>
-              <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-lg border border-surface-300 bg-surface-0/60 p-3"><p className="sensor-label">NDVI</p><p className="mt-2 font-mono text-base text-surface-950">{fmt(ndvi, 'NDVI')}</p></div>
-                <div className="rounded-lg border border-surface-300 bg-surface-0/60 p-3"><p className="sensor-label">Ambient light</p><p className="mt-2 font-mono text-base text-surface-950">{fmt(item.ambient_light_raw, 'ADC')}</p></div>
-                <div className="rounded-lg border border-surface-300 bg-surface-0/60 p-3"><p className="sensor-label">Readings</p><p className="mt-2 font-mono text-base text-surface-950">{plants.find((plant) => plant.plant_id === item.plant_id)?.readingCount ?? '—'}</p></div>
-                <div className="rounded-lg border border-surface-300 bg-surface-0/60 p-3"><p className="sensor-label">Calibration</p><p className="mt-2 text-sm text-surface-950">{calibrated ? 'Available' : 'Unavailable'}</p></div>
-              </div>
-            </div>
-            <div className="flex min-w-[150px] flex-col justify-between rounded-xl border border-vikasa-500/20 bg-vikasa-950/20 p-5">
-              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-vikasa-300"><Leaf className="h-4 w-4" aria-hidden="true" /> Health signal</div>
-              <div className="mt-8"><p className="font-mono text-3xl font-semibold text-surface-950">{ndvi === undefined ? '—' : ndvi.toFixed(3)}</p><p className="mt-1 text-xs text-surface-500">{calibrated ? 'Validated reflectance input' : 'Calibrated reflectance unavailable'}</p></div>
-            </div>
-          </div> : <Empty text="No sensor readings available yet." />}
-        </CardBody>
-      </Card>
-
-      <Card>
-        <CardHeader><p className="sensor-label">System snapshot</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Connection state</h2></CardHeader>
-        <CardBody className="space-y-4">
-          <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-sm text-surface-500"><Database className="h-4 w-4" /> API</span><StatusPill label="api" status={overviewStatus(systemStatus?.api)} size="sm" /></div>
-          <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-sm text-surface-500"><Cpu className="h-4 w-4" /> ESP32</span><StatusPill label="hardware" status={overviewStatus(systemStatus?.esp32)} size="sm" /></div>
-          <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-sm text-surface-500"><Radio className="h-4 w-4" /> Data mode</span><Badge variant="warning">Demo</Badge></div>
-          <div className="border-t border-surface-300 pt-4 text-xs leading-5 text-surface-500">Hardware connectivity is shown only when reported by the configured provider.</div>
-        </CardBody>
-      </Card>
-    </section>
-
-    <section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-      <Card>
-        <CardHeader className="flex items-center justify-between"><div><p className="sensor-label">Available history</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Environmental trends</h2></div><Waves className="h-5 w-5 text-surface-500" aria-hidden="true" /></CardHeader>
-        <CardBody className="grid gap-3 sm:grid-cols-2">
-          <OverviewTrend readings={readings} field="temperature_c" label="Temperature" unit="°C" color="#fbbf24" />
-          <OverviewTrend readings={readings} field="humidity_pct" label="Humidity" unit="%" color="#60a5fa" />
-          <OverviewTrend readings={readings} field="soil_moisture_pct" label="Soil moisture" unit="%" color="#34d399" />
-          <OverviewTrend readings={readings} field="ndvi" label="NDVI · calibrated only" unit="" color="#a3e635" />
-        </CardBody>
-      </Card>
-
-      <Card>
-        <CardHeader><div className="flex items-center justify-between"><div><p className="sensor-label">Optical monitoring</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Reflectance summary</h2></div><Sun className="h-5 w-5 text-surface-500" aria-hidden="true" /></div></CardHeader>
-        <CardBody className="space-y-3">
-          <div className="flex items-center justify-between rounded-lg border border-optical-red-500/20 bg-optical-red-950/15 px-3 py-3"><span className="text-sm text-optical-red-300">RED reflectance</span><span className="font-mono text-sm text-surface-950">{fmt(item?.red_reflectance, '%')}</span></div>
-          <div className="flex items-center justify-between rounded-lg border border-optical-nir-500/20 bg-optical-nir-950/15 px-3 py-3"><span className="text-sm text-optical-nir-300">NIR reflectance</span><span className="font-mono text-sm text-surface-950">{fmt(item?.nir_reflectance, '%')}</span></div>
-          <div className="flex items-center justify-between rounded-lg border border-vikasa-500/20 bg-vikasa-950/15 px-3 py-3"><span className="text-sm text-vikasa-300">NDVI</span><span className="font-mono text-sm text-surface-950">{fmt(ndvi, 'NDVI')}</span></div>
-          <p className="pt-2 text-xs leading-5 text-surface-500">{calibrated ? 'Calibrated reflectance is available for this reading.' : 'Calibrated reflectance unavailable. NDVI is not displayed as valid.'}</p>
-        </CardBody>
-      </Card>
-    </section>
-
-    <Card>
-      <CardHeader className="flex items-center justify-between"><div><p className="sensor-label">Operational context</p><h2 className="mt-1 text-lg font-semibold text-surface-950">Plant coverage & alerts</h2></div><span className="text-xs text-surface-500">{alerts.length} alert{alerts.length === 1 ? '' : 's'}</span></CardHeader>
-      <CardBody>
-        <div className="grid gap-6 lg:grid-cols-[1fr_0.8fr]">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{plants.length ? plants.map((plant) => <div key={plant.plant_id} className="rounded-xl border border-surface-300 bg-surface-0/50 p-4"><div className="flex items-center justify-between gap-2"><span className="font-mono text-sm font-semibold text-surface-950">{plant.plant_id}</span>{statusBadge(plant.healthLabel)}</div><p className="mt-2 text-xs text-surface-500">{plant.readingCount} reading(s) · {plant.species ?? 'Species unavailable'}</p></div>) : <Empty text="No plant summaries available." />}</div>
-          <div className="border-t border-surface-300 pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0"><p className="mb-2 text-sm font-semibold text-surface-950">Recent alerts</p>{alerts.length ? alerts.slice(0, 3).map((alert) => <AlertRow key={alert.id} alert={alert} />) : <Empty text="No alerts available." />}</div>
+    <section aria-label="Plant health" className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.75fr)]">
+      <NDVICard
+        value={ndvi}
+        healthLabel={item?.health_label}
+        label="Plant Health"
+        calibrated={calibrated}
+        className="min-h-[300px] border-vikasa-500/20 shadow-glow-green"
+      />
+      <div className="card flex flex-col justify-between">
+        <div className="card-header">
+          <p className="sensor-label text-vikasa-400">LATEST READING</p>
+          <h2 className="mt-1 text-lg font-semibold text-surface-950">Measurement context</h2>
         </div>
-      </CardBody>
-    </Card>
+        <div className="card-body space-y-5">
+          <div>
+            <p className="sensor-label">Plant</p>
+            <p className="mt-1 font-mono text-xl font-semibold text-surface-950">{item?.plant_id ?? 'Unavailable'}</p>
+            <p className="mt-1 text-sm text-surface-600">{item?.species ?? 'Species unavailable'}</p>
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-surface-300/60 pt-4">
+            <span className="text-sm text-surface-600">Health classification</span>
+            {statusBadge(item?.health_label)}
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-surface-300/60 pt-4 text-xs text-surface-600">
+            <span>{readings.length} available reading{readings.length === 1 ? '' : 's'}</span>
+            <span className="text-right">{item ? new Date(item.timestamp).toLocaleString() : 'Awaiting reading'}</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="environment-heading" className="space-y-3">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="sensor-label text-surface-600">GROWING CONDITIONS</p>
+          <h2 id="environment-heading" className="mt-1 text-lg font-semibold text-surface-950">Environment</h2>
+        </div>
+        <span className="text-xs text-surface-600">Latest sensor values</span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Temperature" value={item?.temperature_c} unit="°C" precision={1} iconColor="amber" icon={<Thermometer className="h-5 w-5" />} />
+        <MetricCard label="Humidity" value={item?.humidity_pct} unit="%" precision={0} iconColor="blue" icon={<Droplets className="h-5 w-5" />} />
+        <MetricCard label="Soil moisture" value={item?.soil_moisture_pct} unit="%" precision={0} iconColor="green" icon={<Gauge className="h-5 w-5" />} />
+        <MetricCard label="Ambient light" value={item?.ambient_light_raw} unit="ADC" precision={0} iconColor="violet" icon={<Sun className="h-5 w-5" />} />
+      </div>
+    </section>
+
+    <section aria-label="Optical sensing and plant status" className="grid gap-5 2xl:grid-cols-2">
+      <OpticalAnalysisCard
+        redReflectance={item?.red_reflectance}
+        nirReflectance={item?.nir_reflectance}
+        redRaw={item?.red_raw}
+        nirRaw={item?.nir_raw}
+        ndvi={ndvi}
+        calibrated={calibrated}
+      />
+      {item ? (
+        <PlantStatusCard
+          plantId={item.plant_id}
+          species={item.species}
+          sessionId={item.session_id}
+          ndvi={ndvi}
+          healthLabel={item.health_label}
+          temperature={item.temperature_c}
+          humidity={item.humidity_pct}
+          soilMoisture={item.soil_moisture_pct}
+          ambientLight={item.ambient_light_raw}
+          readingCount={plants.find((plant) => plant.plant_id === item.plant_id)?.readingCount}
+          lastUpdated={item.timestamp}
+          calibrated={calibrated}
+        />
+      ) : <Empty text="Plant status will appear when a sensor reading is available." />}
+    </section>
+
+    <section aria-label="Plant condition analysis" className="grid gap-5 2xl:grid-cols-2">
+      <StressAnalysisCard
+        ndvi={ndvi}
+        soilMoisture={item?.soil_moisture_pct}
+        temperature={item?.temperature_c}
+        humidity={item?.humidity_pct}
+        redReflectance={item?.red_reflectance}
+        nirReflectance={item?.nir_reflectance}
+        calibrated={calibrated}
+      />
+      {item ? (
+        <RecommendationCard
+          ndvi={ndvi}
+          soilMoisture={item.soil_moisture_pct}
+          temperature={item.temperature_c}
+          humidity={item.humidity_pct}
+          redReflectance={item.red_reflectance}
+          nirReflectance={item.nir_reflectance}
+          calibrated={calibrated}
+          healthLabel={item.health_label}
+        />
+      ) : <Empty text="Recommendations require a sensor reading." />}
+    </section>
+
+    <section aria-labelledby="overview-alerts" className="space-y-3">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="sensor-label text-surface-600">MONITORING</p>
+          <h2 id="overview-alerts" className="mt-1 text-lg font-semibold text-surface-950">Recent alerts</h2>
+        </div>
+        <span className="text-xs text-surface-600">{alerts.length} available</span>
+      </div>
+      {alerts.length ? (
+        <div className="space-y-3">
+          {alerts.slice(0, 3).map((alert) => <AlertCard key={alert.id} alert={alert} />)}
+        </div>
+      ) : <Empty text="No alerts available." />}
+    </section>
   </div>
 }
 export function PlantMonitoring() {
@@ -235,8 +230,8 @@ export function PlantMonitoring() {
             </div>
             <div className="border-t border-surface-300 pt-5">
               <div className="grid gap-6 lg:grid-cols-2">
-                <div><p className="sensor-label">Latest optical summary</p><div className="mt-3 grid gap-3 sm:grid-cols-3"><PlantValue label="RED reflectance" value={selectedReading.red_reflectance === undefined ? 'Not available' : `${selectedReading.red_reflectance.toFixed(2)} %`} accent="red" /><PlantValue label="NIR reflectance" value={selectedReading.nir_reflectance === undefined ? 'Not available' : `${selectedReading.nir_reflectance.toFixed(2)} %`} accent="nir" /><PlantValue label="NDVI" value={selectedNdvi === undefined ? 'Not available' : selectedNdvi.toFixed(3)} accent="green" /></div><p className="mt-3 text-xs text-surface-500">{selectedCalibrated ? 'Calibrated reflectance available.' : 'NDVI unavailable — calibrated reflectance required.'}</p></div>
-                <div><p className="sensor-label">Latest environment summary</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><PlantValue label="Temperature" value={selectedReading.temperature_c === undefined ? 'Not available' : `${selectedReading.temperature_c.toFixed(1)} °C`} /><PlantValue label="Humidity" value={selectedReading.humidity_pct === undefined ? 'Not available' : `${selectedReading.humidity_pct.toFixed(0)} %`} /><PlantValue label="Soil moisture" value={selectedReading.soil_moisture_pct === undefined ? 'Not available' : `${selectedReading.soil_moisture_pct.toFixed(0)} %`} /><PlantValue label="Ambient light" value={selectedReading.ambient_light_raw === undefined ? 'Not available' : `${selectedReading.ambient_light_raw.toFixed(0)} ADC`} /></div></div>
+                <div><p className="sensor-label">Latest optical summary</p><div className="mt-3 grid gap-3 sm:grid-cols-3"><PlantValue label="RED reflectance" value={selectedReading.red_reflectance == null ? 'Not available' : `${selectedReading.red_reflectance.toFixed(2)} %`} accent="red" /><PlantValue label="NIR reflectance" value={selectedReading.nir_reflectance == null ? 'Not available' : `${selectedReading.nir_reflectance.toFixed(2)} %`} accent="nir" /><PlantValue label="NDVI" value={selectedNdvi == null ? 'Not available' : selectedNdvi.toFixed(3)} accent="green" /></div><p className="mt-3 text-xs text-surface-500">{selectedCalibrated ? 'Calibrated reflectance available.' : 'NDVI unavailable — calibrated reflectance required.'}</p></div>
+                <div><p className="sensor-label">Latest environment summary</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><PlantValue label="Temperature" value={selectedReading.temperature_c == null ? 'Not available' : `${selectedReading.temperature_c.toFixed(1)} °C`} /><PlantValue label="Humidity" value={selectedReading.humidity_pct == null ? 'Not available' : `${selectedReading.humidity_pct.toFixed(0)} %`} /><PlantValue label="Soil moisture" value={selectedReading.soil_moisture_pct == null ? 'Not available' : `${selectedReading.soil_moisture_pct.toFixed(0)} %`} /><PlantValue label="Ambient light" value={selectedReading.ambient_light_raw == null ? 'Not available' : `${selectedReading.ambient_light_raw.toFixed(0)} ADC`} /></div></div>
               </div>
             </div>
           </div> : <Empty text="No readings available for this plant." />}
@@ -334,7 +329,7 @@ export function OpticalSensing() {
         <CardHeader><div className="flex items-center justify-between"><div><p className="sensor-label">Derived signal</p><h2 className="mt-1 text-lg font-semibold text-surface-950">NDVI</h2></div><Leaf className="h-5 w-5 text-vikasa-400" aria-hidden="true" /></div></CardHeader>
         <CardBody>
           <div className="rounded-xl border border-vikasa-500/25 bg-vikasa-950/20 p-5">
-            <p className="font-mono text-4xl font-semibold text-surface-950">{ndvi === undefined ? '—' : ndvi.toFixed(3)}</p>
+            <p className="font-mono text-4xl font-semibold text-surface-950">{ndvi == null ? '—' : ndvi.toFixed(3)}</p>
             <p className="mt-2 text-sm text-vikasa-300">{calibrated ? 'Calibrated reflectance available' : 'NDVI unavailable — calibrated reflectance required'}</p>
           </div>
           <div className="mt-5 flex items-center justify-between border-b border-surface-300 pb-3"><span className="text-sm text-surface-500">Calibration state</span><Badge variant={calibrated ? 'success' : 'warning'}>{calibrated ? 'Calibrated' : item ? 'Calibration required' : 'Unknown'}</Badge></div>
@@ -366,12 +361,12 @@ export function OpticalSensing() {
     </Card>
   </div>
 }
-function ReflectanceBar({ label, value, color }: { label: string; value?: number; color: 'red' | 'nir' }) {
-  const fill = value === undefined ? 0 : Math.min(Math.max(value, 0), 100)
+function ReflectanceBar({ label, value, color }: { label: string; value?: number | null; color: 'red' | 'nir' }) {
+  const fill = value == null ? 0 : Math.min(Math.max(value, 0), 100)
   const accent = color === 'red' ? 'bg-optical-red-500' : 'bg-optical-nir-500'
   const text = color === 'red' ? 'text-optical-red-300' : 'text-optical-nir-300'
   return <div>
-    <div className="mb-2 flex items-center justify-between text-sm"><span className={`font-medium ${text}`}>{label}</span><span className="font-mono text-surface-950">{value === undefined ? 'Not available' : `${value.toFixed(2)} %`}</span></div>
+    <div className="mb-2 flex items-center justify-between text-sm"><span className={`font-medium ${text}`}>{label}</span><span className="font-mono text-surface-950">{value == null ? 'Not available' : `${value.toFixed(2)} %`}</span></div>
     <div className="h-2 overflow-hidden rounded-full bg-surface-300"><div className={`h-full rounded-full ${accent}`} style={{ width: `${fill}%` }} /></div>
   </div>
 }
@@ -711,10 +706,10 @@ function environmentalTrend(readings: SensorReadingWithMeta[], field: 'temperatu
     .reverse()
     .map((reading) => Number(reading[field]))
 }
-function ConditionValue({ label, value, unit, icon }: { label: string; value?: number; unit: string; icon: React.ReactNode }) {
+function ConditionValue({ label, value, unit, icon }: { label: string; value?: number | null; unit: string; icon: React.ReactNode }) {
   return <div className="rounded-xl border border-surface-300 bg-surface-0/50 p-4">
     <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-surface-500">{icon}{label}</div>
-    <p className="mt-4 font-mono text-xl font-semibold text-surface-950">{value === undefined ? 'Not available' : `${value.toFixed(unit === '°C' ? 1 : 0)} ${unit}`}</p>
+    <p className="mt-4 font-mono text-xl font-semibold text-surface-950">{value == null ? 'Not available' : `${value.toFixed(unit === '°C' ? 1 : 0)} ${unit}`}</p>
   </div>
 }
 function EnvironmentalTrend({ readings, field, label, unit, color }: { readings: SensorReadingWithMeta[]; field: 'temperature_c' | 'humidity_pct' | 'soil_moisture_pct'; label: string; unit: string; color: string }) {
@@ -752,7 +747,7 @@ function HistorySummary({ label, value, detail, icon }: { label: string; value: 
 function Loading({ title }: { title: string }) { return <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500" role="status">{title}…</div> }
 function ErrorState() { return <AlertBanner variant="danger" title="Unable to load dashboard">The selected provider returned an error. Check the API configuration or return to demo mode.</AlertBanner> }
 function Empty({ text }: { text: string }) { return <p className="py-8 text-center text-sm text-slate-500">{text}</p> }
-function OpticalMetric({ label, value, suffix = 'ADC', precision }: { label: string; value?: number; suffix?: string; precision?: number }) { const decimals = precision ?? (suffix === 'ADC' ? 0 : label === 'NDVI' ? 3 : 2); const accent = label.startsWith('RED') ? 'border-optical-red-500/20 bg-optical-red-950/15' : label.startsWith('NIR') ? 'border-optical-nir-500/20 bg-optical-nir-950/15' : 'border-surface-300 bg-surface-0/50'; const labelColor = label.startsWith('RED') ? 'text-optical-red-300' : label.startsWith('NIR') ? 'text-optical-nir-300' : 'text-surface-500'; return <div className={`rounded-xl border p-4 ${accent}`}><p className={`text-xs font-semibold uppercase tracking-[0.14em] ${labelColor}`}>{label}</p><p className="mt-2 font-mono text-lg text-surface-950">{value === undefined ? 'Not available' : `${value.toFixed(decimals)}${suffix ? ` ${suffix}` : ''}`}</p></div> }
+function OpticalMetric({ label, value, suffix = 'ADC', precision }: { label: string; value?: number | null; suffix?: string; precision?: number }) { const decimals = precision ?? (suffix === 'ADC' ? 0 : label === 'NDVI' ? 3 : 2); const accent = label.startsWith('RED') ? 'border-optical-red-500/20 bg-optical-red-950/15' : label.startsWith('NIR') ? 'border-optical-nir-500/20 bg-optical-nir-950/15' : 'border-surface-300 bg-surface-0/50'; const labelColor = label.startsWith('RED') ? 'text-optical-red-300' : label.startsWith('NIR') ? 'text-optical-nir-300' : 'text-surface-500'; return <div className={`rounded-xl border p-4 ${accent}`}><p className={`text-xs font-semibold uppercase tracking-[0.14em] ${labelColor}`}>{label}</p><p className="mt-2 font-mono text-lg text-surface-950">{value == null ? 'Not available' : `${value.toFixed(decimals)}${suffix ? ` ${suffix}` : ''}`}</p></div> }
 function AlertRow({ alert, expanded = false }: { alert: AlertItem; expanded?: boolean }) {
   const config = alert.severity === 'critical'
     ? { icon: ShieldAlert, iconClass: 'text-red-400', border: 'border-l-red-500', surface: 'bg-red-950/10', badge: 'danger', label: 'Critical' }

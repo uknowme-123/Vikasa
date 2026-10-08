@@ -6,6 +6,8 @@
 #include <HTTPClient.h>
 #include <string.h>
 #include <stdio.h>
+#include <memory>
+#include <new>
 
 #if DEVELOPMENT_MODE
 #include <HardwareSerial.h>
@@ -72,8 +74,15 @@ ApiResponseCode api_client_send_reading(ApiClient* client, const SensorReading* 
     }
     
     // Serialize reading to JSON
-    char json_buffer[MAX_JSON_PAYLOAD_SIZE];
-    size_t json_len = serialize_sensor_reading(reading, json_buffer, sizeof(json_buffer));
+    std::unique_ptr<char[]> json_buffer(new (std::nothrow) char[MAX_JSON_PAYLOAD_SIZE]);
+    if (!json_buffer) {
+        strncpy(client->last_error_message, "Out of memory allocating JSON buffer",
+                sizeof(client->last_error_message) - 1);
+        client->last_error_message[sizeof(client->last_error_message) - 1] = '\0';
+        return API_MEMORY_ERROR;
+    }
+
+    size_t json_len = serialize_sensor_reading(reading, json_buffer.get(), MAX_JSON_PAYLOAD_SIZE);
     
     if (json_len == 0) {
         strncpy(client->last_error_message, "JSON serialization failed", sizeof(client->last_error_message) - 1);
@@ -81,7 +90,7 @@ ApiResponseCode api_client_send_reading(ApiClient* client, const SensorReading* 
     }
     
 #if DEVELOPMENT_MODE
-    Serial.printf("[API] Sending payload (%zu bytes): %s\n", json_len, json_buffer);
+    Serial.printf("[API] Sending payload (%zu bytes): %s\n", json_len, json_buffer.get());
 #endif
     
     // Build full URL
@@ -106,7 +115,7 @@ ApiResponseCode api_client_send_reading(ApiClient* client, const SensorReading* 
 #if DEVELOPMENT_MODE || defined(VIKASA_SERIAL_DIAGNOSTICS)
         Serial.printf("[API] HTTP POST attempt %d/%d\n", attempt + 1, client->max_retries + 1);
 #endif
-        int http_code = http.POST((uint8_t*)json_buffer, json_len);
+        int http_code = http.POST(reinterpret_cast<uint8_t*>(json_buffer.get()), json_len);
         
         client->last_response_code = http_code;
         

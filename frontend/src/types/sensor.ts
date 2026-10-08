@@ -9,20 +9,20 @@ export const SensorReadingSchema = z.object({
   stress_type: z.string().optional(),
   health_label: z.string().optional(),
   label_evidence: z.string().optional(),
-  red_raw: z.number().finite().nonnegative().optional(),
-  nir_raw: z.number().finite().nonnegative().optional(),
-  red_dark: z.number().finite().nonnegative().optional(),
-  nir_dark: z.number().finite().nonnegative().optional(),
-  red_reference: z.number().finite().nonnegative().optional(),
-  nir_reference: z.number().finite().nonnegative().optional(),
-  red_reflectance: z.number().finite().min(0).max(100).optional(),
-  nir_reflectance: z.number().finite().min(0).max(100).optional(),
-  ndvi: z.number().finite().min(-1).max(1).optional(),
-  temperature_c: z.number().finite().optional(),
-  humidity_pct: z.number().finite().min(0).max(100).optional(),
-  soil_moisture_raw: z.number().finite().nonnegative().optional(),
-  soil_moisture_pct: z.number().finite().min(0).max(100).optional(),
-  ambient_light_raw: z.number().finite().nonnegative().optional(),
+  red_raw: z.number().finite().nonnegative().nullable().optional(),
+  nir_raw: z.number().finite().nonnegative().nullable().optional(),
+  red_dark: z.number().finite().nonnegative().nullable().optional(),
+  nir_dark: z.number().finite().nonnegative().nullable().optional(),
+  red_reference: z.number().finite().nonnegative().nullable().optional(),
+  nir_reference: z.number().finite().nonnegative().nullable().optional(),
+  red_reflectance: z.number().finite().min(0).max(100).nullable().optional(),
+  nir_reflectance: z.number().finite().min(0).max(100).nullable().optional(),
+  ndvi: z.number().finite().min(-1).max(1).nullable().optional(),
+  temperature_c: z.number().finite().nullable().optional(),
+  humidity_pct: z.number().finite().min(0).max(100).nullable().optional(),
+  soil_moisture_raw: z.number().finite().nonnegative().nullable().optional(),
+  soil_moisture_pct: z.number().finite().min(0).max(100).nullable().optional(),
+  ambient_light_raw: z.number().finite().nonnegative().nullable().optional(),
   operator_id: z.string().min(1),
   notes: z.string().optional(),
 })
@@ -73,13 +73,13 @@ export const EXPECTED_CSV_COLUMNS = [
   'ambient_light_raw', 'operator_id', 'notes',
 ] as const
 
-export function calculateNDVI(red: number | undefined, nir: number | undefined) {
-  if (red === undefined || nir === undefined || red + nir === 0) return undefined
+export function calculateNDVI(red: number | null | undefined, nir: number | null | undefined) {
+  if (red == null || nir == null || red + nir === 0) return undefined
   return (nir - red) / (nir + red)
 }
 export function hasCalibratedReflectance(reading: SensorReading) {
-  return reading.red_reflectance !== undefined && reading.nir_reflectance !== undefined
+  return typeof reading.red_reflectance === 'number' && typeof reading.nir_reflectance === 'number'
 }
-export function displayValue(value: number | undefined, unit = '') {
-  return value === undefined ? 'Not available' : `${value.toLocaleString()}${unit ? ` ${unit}` : ''}`
+export function displayValue(value: number | null | undefined, unit = '') {
+  return value == null ? 'Not available' : `${value.toLocaleString()}${unit ? ` ${unit}` : ''}`
 }

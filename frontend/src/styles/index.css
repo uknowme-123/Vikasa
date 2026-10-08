@@ -4,12 +4,13 @@
 
 @layer base {
   :root {
-    --color-primary: 30 185 90;
+    --color-primary: 34 197 94;
     --color-primary-hover: 22 163 74;
-    --color-red-optical: 239 68 68;
-    --color-nir-optical: 99 102 241;
-    --color-warning: 245 158 11;
+    --color-red-optical: 248 113 113;
+    --color-nir-optical: 56 189 248;
+    --color-warning: 250 204 21;
     --color-danger: 239 68 68;
+    color-scheme: dark;
   }
 
   html {
@@ -17,7 +18,12 @@
   }
 
   body {
-    @apply bg-surface-0 text-surface-900 font-sans;
+    @apply min-h-screen bg-surface-0 text-surface-900 font-sans antialiased;
+    background-image:
+      radial-gradient(ellipse at 12% 0%, rgb(34 197 94 / 0.075), transparent 32rem),
+      radial-gradient(ellipse at 88% 14%, rgb(56 189 248 / 0.035), transparent 28rem);
+    background-attachment: fixed;
+    font-feature-settings: 'ss01' on, 'cv11' on;
   }
 
   * {
@@ -51,7 +57,7 @@
   }
 
   .btn-primary {
-    @apply btn bg-vikasa-600 text-surface-950 hover:bg-vikasa-500 focus:ring-vikasa-400 active:bg-vikasa-700 shadow-[0_2px_4px_rgb(30_185_90/0.25)];
+    @apply btn bg-vikasa-600 text-surface-950 hover:bg-vikasa-500 focus:ring-vikasa-400 active:bg-vikasa-700 shadow-[0_2px_4px_rgb(34_197_94/0.25)];
   }
 
   .btn-secondary {
@@ -71,28 +77,34 @@
   }
 
   .btn-optical-nir {
-    @apply btn bg-optical-nir-600 text-white hover:bg-optical-nir-500 focus:ring-optical-nir-400 active:bg-optical-nir-700 shadow-[0_2px_4px_rgb(99_102_241/0.25)];
+    @apply btn bg-optical-nir-600 text-white hover:bg-optical-nir-500 focus:ring-optical-nir-400 active:bg-optical-nir-700 shadow-[0_2px_4px_rgb(56_189_248/0.25)];
   }
 
   .card {
-    @apply bg-surface-100 rounded-xl border border-surface-300/50 shadow-surface transition-all duration-200;
+    @apply rounded-2xl border border-surface-300/70 shadow-surface transition-all duration-200;
+    background: linear-gradient(145deg, rgb(16 27 21 / 0.96), rgb(11 18 14 / 0.96));
     transition-timing-function: cubic-bezier(0.19, 1, 0.22, 1);
   }
 
   .card-raised {
-    @apply card shadow-raised hover:shadow-overlay;
+    @apply card shadow-raised;
   }
 
   .card-interactive {
-    @apply card-raised hover:border-vikasa-500/20 cursor-pointer;
+    @apply card-raised cursor-pointer transition-all duration-200;
+  }
+
+  .card-interactive:hover {
+    @apply border-vikasa-500/30 shadow-glow-green;
+    transform: translateY(-1px);
   }
 
   .card-header {
-    @apply px-5 py-4 border-b border-surface-300/50;
+    @apply px-5 py-4 border-b border-surface-300/60 sm:px-6 sm:py-5;
   }
 
   .card-body {
-    @apply p-5;
+    @apply p-5 sm:p-6;
   }
 
   .input {
@@ -171,6 +183,10 @@
     @apply text-4xl font-bold text-surface-950 tabular-nums font-mono;
   }
 
+  .sensor-value-xl {
+    @apply text-5xl font-bold text-surface-950 tabular-nums font-mono;
+  }
+
   .sensor-unit {
     @apply text-sm text-surface-500 ml-1 font-normal;
   }
@@ -204,11 +220,20 @@
   }
 
   .sidebar-link {
-    @apply flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-surface-500 hover:bg-surface-200/50 hover:text-surface-200 transition-all duration-150;
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-surface-700 hover:bg-surface-200/70 hover:text-surface-950 transition-all duration-150;
   }
 
   .sidebar-link-active {
-    @apply bg-vikasa-500/10 text-vikasa-300 border-l-3 border-vikasa-400 pl-[calc(0.75rem-3px)];
+    @apply bg-vikasa-500/10 text-vikasa-300 border border-vikasa-500/15 shadow-glow-green;
+  }
+
+  .thin-progress {
+    @apply h-1 overflow-hidden rounded-full bg-surface-300/70;
+  }
+
+  .thin-progress > span {
+    @apply block h-full rounded-full bg-vikasa-500 transition-[width] duration-500;
+    box-shadow: 0 0 12px rgb(34 197 94 / 0.4);
   }
 
   .skeleton {
@@ -272,6 +297,11 @@
     background-color: theme('colors.surface.400');
   }
 
+  html {
+    scrollbar-color: theme('colors.surface.400') theme('colors.surface.0');
+    scrollbar-width: thin;
+  }
+
   .text-balance {
     text-wrap: balance;
   }
@@ -298,8 +328,8 @@
   }
 
   @keyframes pulse-glow {
-    0%, 100% { box-shadow: 0 0 0 0 rgb(30 185 90 / 0.12); }
-    50% { box-shadow: 0 0 24px 4px rgb(30 185 90 / 0.12); }
+    0%, 100% { box-shadow: 0 0 0 0 rgb(34 197 94 / 0.12); }
+    50% { box-shadow: 0 0 24px 4px rgb(34 197 94 / 0.12); }
   }
 
   @keyframes pulse-glow-red {
@@ -308,8 +338,13 @@
   }
 
   @keyframes pulse-glow-nir {
-    0%, 100% { box-shadow: 0 0 0 0 rgb(99 102 241 / 0.12); }
-    50% { box-shadow: 0 0 24px 4px rgb(99 102 241 / 0.12); }
+    0%, 100% { box-shadow: 0 0 0 0 rgb(56 189 248 / 0.12); }
+    50% { box-shadow: 0 0 24px 4px rgb(56 189 248 / 0.12); }
+  }
+
+  @keyframes count-up {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   .animate-fade-in {
@@ -334,6 +369,10 @@
 
   .animate-pulse-glow-nir {
     animation: pulse-glow-nir 2s ease-in-out infinite;
+  }
+
+  .animate-count-up {
+    animation: count-up 600ms ease-out-expo;
   }
 
   .transition-smooth {
