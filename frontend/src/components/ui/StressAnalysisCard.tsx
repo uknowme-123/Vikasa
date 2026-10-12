@@ -61,7 +61,7 @@ const statusConfig = {
 }
 
 export const StressAnalysisCard = forwardRef<HTMLDivElement, StressAnalysisCardProps>(
-  ({ className = '', ndvi, soilMoisture, temperature, humidity, redReflectance, nirReflectance, calibrated = false, ...props }, ref) => {
+  ({ className = '', ndvi, soilMoisture, temperature, humidity, redReflectance: _redReflectance, nirReflectance: _nirReflectance, calibrated = false, ...props }, ref) => {
     const values = { ndvi, soilMoisture, temperature, humidity }
     const availableCount = Object.values(values).filter(v => v != null).length
     const hasEnoughData = availableCount >= 3

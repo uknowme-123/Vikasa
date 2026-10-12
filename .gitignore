@@ -41,6 +41,7 @@ __pycache__/
 .pytest_cache/
 *.db
 *.sqlite
+.venv/
 
 # Firebase credentials (never commit)
 firebase-credentials.json
