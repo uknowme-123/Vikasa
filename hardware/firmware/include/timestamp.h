@@ -11,6 +11,12 @@
 #include <Arduino.h>
 #include "config.h"
 
+static const time_t TIMESTAMP_MIN_PLAUSIBLE_UNIX = 1577836800;
+
+static inline bool timestamp_unix_is_plausible(time_t unix_time) {
+    return unix_time >= TIMESTAMP_MIN_PLAUSIBLE_UNIX;
+}
+
 // Timestamp synchronization state
 enum TimestampSyncState {
     TIMESTAMP_UNSYNCED = 0,      // No NTP sync, using millis() since boot

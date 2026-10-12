@@ -39,7 +39,12 @@ def test_health_and_existing_sensor_data_endpoint(client):
 def test_reading_aliases_create_latest_history_and_plant_status(client):
     response = client.post("/api/readings", json=valid_payload())
     assert response.status_code == 201
-    assert response.get_json()["data"]["reading_id"] == "API-READING-001"
+    created = response.get_json()["data"]
+    assert created["reading_id"] == "API-READING-001"
+    assert created["ndvi"] is None
+    assert created["red_reflectance"] is None
+    assert created["nir_reflectance"] is None
+    assert created["raw_ndvi_estimate"] == pytest.approx((3200 - 2100) / (3200 + 2100))
 
     latest = client.get("/api/readings/latest")
     history = client.get("/api/readings?limit=1")
@@ -53,6 +58,23 @@ def test_reading_aliases_create_latest_history_and_plant_status(client):
     assert status.get_json()["data"]["status_available"] is False
 
 
+def test_raw_ndvi_estimate_uses_raw_channels_without_reflectance(client):
+    payload = valid_payload("RAW-NDVI-001")
+    payload["red_raw"] = 2278
+    payload["nir_raw"] = 2656
+    payload["soil_moisture_raw"] = 4095
+    payload["temperature_c"] = 26.6
+    payload["humidity_pct"] = 72.9
+
+    response = client.post("/api/readings", json=payload)
+    data = response.get_json()["data"]
+
+    assert response.status_code == 201
+    assert data["ndvi"] is None
+    assert data["raw_ndvi_estimate"] == pytest.approx(0.0766, abs=0.0001)
+    assert data["soil_moisture_raw"] == 4095
+
+
 def test_invalid_payload_duplicate_and_missing_plant(client):
     invalid = client.post("/api/readings", json={})
     assert invalid.status_code == 400
@@ -63,6 +85,18 @@ def test_invalid_payload_duplicate_and_missing_plant(client):
 
     assert duplicate.status_code == 409
     assert missing_plant.status_code == 404
+
+
+def test_sensor_data_rejects_unix_epoch_timestamp(client):
+    payload = valid_payload()
+    payload["timestamp"] = "1970-01-01T00:02:51Z"
+
+    response = client.post("/api/sensor-data", json=payload)
+
+    assert response.status_code == 400
+    assert response.get_json()["error"]["message"] == (
+        "Timestamp is too old (more than 1 year)"
+    )
 
 
 @pytest.mark.parametrize("query", ["?limit=0", "?limit=bad", "?page=bad", "?page_size=0"])

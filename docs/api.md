@@ -2,9 +2,9 @@
 
 ## Overview
 
-The Vikāsa API is a RESTful service for managing plant stress monitoring sensor data. It receives sensor readings from ESP32 devices, validates them against the Vikāsa 24-column sensor schema, stores them in Firebase Realtime Database, and exposes data to the frontend dashboard.
+The Vikāsa API is a RESTful service for managing plant stress monitoring sensor data. It receives sensor readings from ESP32 devices, validates them against the Vikāsa 24-column sensor schema, stores them in memory/Supabase/Firebase, and exposes data to the frontend dashboard.
 
-**Base URL**: `http://localhost:5000/api` (development)
+**Base URL**: `http://127.0.0.1:5000/api` (development)
 
 **Version**: 1.0.0
 
@@ -156,6 +156,7 @@ Create a new sensor reading.
     "red_reflectance": 54.2,
     "nir_reflectance": 79.8,
     "ndvi": 0.191,
+    "raw_ndvi_estimate": 0.208,
     "temperature_c": 24.5,
     "humidity_pct": 62.3,
     "soil_moisture_raw": 1850,
@@ -235,6 +236,7 @@ Get the most recent sensor reading, optionally filtered by plant.
     "reading_id": "READING-2026-001",
     "plant_id": "PLANT-001",
     ...
+    "raw_ndvi_estimate": 0.208
   },
   "meta": { ... }
 }
@@ -262,7 +264,7 @@ List sensor readings with pagination and filters.
 - `session_id` (string, optional): Filter by session ID
 - `start_time` (ISO 8601, optional): Filter readings after this time
 - `end_time` (ISO 8601, optional): Filter readings before this time
-- `page_size` (alternative to `limit`, int, 1-1000)
+- `limit` (alternative to `page_size`, int, 1-1000)
 
 **Success Response** (200 OK):
 ```json
@@ -270,8 +272,8 @@ List sensor readings with pagination and filters.
   "success": true,
   "data": {
     "items": [
-      { "reading_id": "...", "plant_id": "...", ... },
-      { "reading_id": "...", "plant_id": "...", ... }
+      { "reading_id": "...", "plant_id": "...", ..., "raw_ndvi_estimate": 0.208 },
+      { "reading_id": "...", "plant_id": "...", ..., "raw_ndvi_estimate": 0.195 }
     ],
     "total": 150,
     "page": 1,
@@ -433,8 +435,13 @@ FLASK_ENV=development
 # CORS
 CORS_ORIGIN=http://localhost:5173
 
-# Storage Backend: "memory" or "firebase"
+# Storage Backend: "memory" (dev/testing), "supabase" (production), or "firebase"
 STORAGE_BACKEND=memory
+
+# Supabase Configuration (required when STORAGE_BACKEND=supabase)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_TIMEOUT_SECONDS=10
 
 # Firebase Configuration (required when STORAGE_BACKEND=firebase)
 FIREBASE_PROJECT_ID=your-project-id
@@ -477,7 +484,8 @@ The API uses the 24-column Vikāsa sensor schema aligned with `data/raw/hardware
 | nir_reference | integer | No | NIR channel reference (0-65535) |
 | red_reflectance | float | No | Red reflectance % (0-100) |
 | nir_reflectance | float | No | NIR reflectance % (0-100) |
-| ndvi | float | No | NDVI index (-1 to 1) |
+| ndvi | float | No | Calibrated NDVI index (-1 to 1) |
+| raw_ndvi_estimate | float | No (computed) | Raw NDVI estimate from ADC counts (-1 to 1) |
 | temperature_c | float | No | Temperature Celsius (-50 to 100) |
 | humidity_pct | float | No | Humidity % (0-100) |
 | soil_moisture_raw | integer | No | Soil moisture raw ADC (0-65535) |
@@ -485,6 +493,8 @@ The API uses the 24-column Vikāsa sensor schema aligned with `data/raw/hardware
 | ambient_light_raw | integer | No | Ambient light raw ADC (0-65535) |
 | operator_id | string | Yes | Operator identifier |
 | notes | string | No | Additional notes |
+
+**Note**: `raw_ndvi_estimate` is a **computed field** (not stored) calculated as `(nir_raw - red_raw) / (nir_raw + red_raw)` when both raw channels are present. It is **not calibrated NDVI** and should not be used for plant health assessment.
 
 ---
 
@@ -500,7 +510,7 @@ The API uses the 24-column Vikāsa sensor schema aligned with `data/raw/hardware
 
 5. **Missing = Blank**: Unmeasured values should be omitted (null), never filled with zero or -999.
 
-5. **Raw vs Calibrated Separation**: Raw ADC and calibrated reflectance are stored separately and never conflated.
+6. **Raw vs Calibrated Separation**: Raw ADC and calibrated reflectance are stored separately and never conflated.
 
 ---
 
@@ -515,11 +525,11 @@ pip install -r requirements.txt
 # Copy environment template
 cp .env.example .env
 
-# Run development server
-python -m backend.app
+# Run development server (in-memory storage)
+STORAGE_BACKEND=memory python -m backend.app
 ```
 
-The API will be available at `http://localhost:5000/api`
+The API will be available at `http://127.0.0.1:5000/api`
 
 ### Production
 
@@ -532,12 +542,23 @@ gunicorn -w 4 -b 0.0.0.0:5000 "backend.app:create_app()"
 ## Testing
 
 ```bash
-# Run all tests
-pytest backend/tests/ -v
+# Run all tests (requires STORAGE_BACKEND=memory)
+STORAGE_BACKEND=memory pytest backend/tests/ -v
 
 # Run specific test file
-pytest backend/tests/test_readings_api.py -v
+STORAGE_BACKEND=memory pytest backend/tests/test_readings_api.py -v
 
 # Run with coverage
-pytest backend/tests/ --cov=backend.app
+STORAGE_BACKEND=memory pytest backend/tests/ --cov=backend.app
 ```
+
+All 57 tests should pass.
+
+---
+
+## Frontend Integration Notes
+
+- **Frontend API base URL**: `http://127.0.0.1:5000` (frontend appends `/api` internally)
+- **Firmware API base URL**: `http://127.0.0.1:5000/api` (firmware includes `/api`)
+- **Dashboard polling**: Frontend polls `/api/readings` every 10 seconds via TanStack Query `refetchInterval: 10000`
+- **Raw NDVI estimate**: Backend includes `raw_ndvi_estimate` in responses; frontend displays it when calibrated NDVI is unavailable, clearly labeled as an estimate

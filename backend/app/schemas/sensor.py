@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 import re
 
 from backend.app.config import config
@@ -33,6 +33,17 @@ class SensorReadingBase(BaseModel):
 
     # Computed indices
     ndvi: Optional[float] = Field(None, ge=-1.0, le=1.0, description="Normalized Difference Vegetation Index")
+
+    @computed_field(return_type=Optional[float])
+    @property
+    def raw_ndvi_estimate(self) -> Optional[float]:
+        """Estimate NDVI from raw ADC counts without treating it as calibrated NDVI."""
+        if self.red_raw is None or self.nir_raw is None:
+            return None
+        denominator = self.nir_raw + self.red_raw
+        if denominator == 0:
+            return None
+        return (self.nir_raw - self.red_raw) / denominator
 
     # Environmental sensors
     temperature_c: Optional[float] = Field(None, ge=-50.0, le=100.0, description="Temperature in Celsius")

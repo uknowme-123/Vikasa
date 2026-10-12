@@ -46,6 +46,7 @@ class SupabaseStorage(StorageService):
     def _payload(cls, reading: SensorReadingCreate) -> dict[str, Any]:
         """Serialize a validated reading without changing nullable values."""
         payload = reading.model_dump(mode="json")
+        payload.pop("raw_ndvi_estimate", None)
         if isinstance(reading.timestamp, datetime):
             payload["timestamp"] = cls._utc_iso(reading.timestamp)
         return payload

@@ -134,6 +134,10 @@ ApiResponseCode api_client_send_reading(ApiClient* client, const SensorReading* 
         }
 #elif defined(VIKASA_SERIAL_DIAGNOSTICS)
         Serial.printf("[API] HTTP result: %d\n", http_code);
+        if (http_code == 400 && response_body.length() > 0) {
+            Serial.printf("[API] HTTP 400 response (first 256 chars): %.256s\n",
+                          response_body.c_str());
+        }
 #endif
         
         // Handle response

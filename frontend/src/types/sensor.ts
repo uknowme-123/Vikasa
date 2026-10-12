@@ -18,6 +18,7 @@ export const SensorReadingSchema = z.object({
   red_reflectance: z.number().finite().min(0).max(100).nullable().optional(),
   nir_reflectance: z.number().finite().min(0).max(100).nullable().optional(),
   ndvi: z.number().finite().min(-1).max(1).nullable().optional(),
+  raw_ndvi_estimate: z.number().finite().min(-1).max(1).nullable().optional(),
   temperature_c: z.number().finite().nullable().optional(),
   humidity_pct: z.number().finite().min(0).max(100).nullable().optional(),
   soil_moisture_raw: z.number().finite().nonnegative().nullable().optional(),
@@ -74,8 +75,12 @@ export const EXPECTED_CSV_COLUMNS = [
 ] as const
 
 export function calculateNDVI(red: number | null | undefined, nir: number | null | undefined) {
-  if (red == null || nir == null || red + nir === 0) return undefined
+  if (red == null || nir == null || !Number.isFinite(red) || !Number.isFinite(nir) || red + nir === 0) return undefined
   return (nir - red) / (nir + red)
+}
+export function getRawNDVIEstimate(reading: SensorReading | null | undefined) {
+  if (!reading) return undefined
+  return reading.raw_ndvi_estimate ?? calculateNDVI(reading.red_raw, reading.nir_raw)
 }
 export function hasCalibratedReflectance(reading: SensorReading) {
   return typeof reading.red_reflectance === 'number' && typeof reading.nir_reflectance === 'number'

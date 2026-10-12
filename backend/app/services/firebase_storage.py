@@ -222,6 +222,7 @@ class FirebaseStorage(StorageService):
         """Create a new sensor reading in Firebase."""
         ref = self._require_reference()
         reading_data = reading.model_dump(mode="json")
+        reading_data.pop("raw_ndvi_estimate", None)
         reading_data["created_at"] = datetime.now(timezone.utc).isoformat()
 
         def reserve_reading(current):

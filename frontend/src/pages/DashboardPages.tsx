@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Activity, AlertTriangle, Bell, CheckCircle2, Clock3, Cpu, Database, Droplets, FileText, Gauge, Info, Leaf, Radio, Search, ShieldAlert, Sun, Thermometer, Upload, Waves, WifiOff } from 'lucide-react'
 import { useAlerts, usePlants, useReadings, useStatus } from '../hooks/useSensorData'
 import { getDataProvider } from '../services/api'
-import { displayValue, hasCalibratedReflectance, type AlertItem, type CSVValidationResult, type SensorReadingWithMeta } from '../types/sensor'
+import { displayValue, getRawNDVIEstimate, hasCalibratedReflectance, type AlertItem, type CSVValidationResult, type SensorReadingWithMeta } from '../types/sensor'
 import { AlertBanner } from '../components/ui/AlertBanner'
 import { Badge } from '../components/ui/Badge'
 import { Card, CardBody, CardHeader } from '../components/ui/Card'
@@ -30,7 +30,7 @@ export function Overview() {
   const providerMode = getDataProvider().mode
   const item = latest(readings)
   const calibrated = item ? hasCalibratedReflectance(item) : false
-  const ndvi = calibrated ? item?.ndvi : undefined
+  const ndvi = calibrated ? item?.ndvi : getRawNDVIEstimate(item)
 
   if (isLoading) return <Loading title="Loading overview" />
   if (error) return <ErrorState />
@@ -54,8 +54,8 @@ export function Overview() {
     <section aria-label="Plant health" className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.75fr)]">
       <NDVICard
         value={ndvi}
-        healthLabel={item?.health_label}
-        label="Plant Health"
+        label={calibrated ? 'Plant Health' : 'Raw NDVI Estimate'}
+        subtitle={calibrated ? undefined : 'Estimated from raw RED + NIR ADC counts'}
         calibrated={calibrated}
         className="min-h-[300px] border-vikasa-500/20 shadow-glow-green"
       />
@@ -93,7 +93,7 @@ export function Overview() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Temperature" value={item?.temperature_c} unit="°C" precision={1} iconColor="amber" icon={<Thermometer className="h-5 w-5" />} />
         <MetricCard label="Humidity" value={item?.humidity_pct} unit="%" precision={0} iconColor="blue" icon={<Droplets className="h-5 w-5" />} />
-        <MetricCard label="Soil moisture" value={item?.soil_moisture_pct} unit="%" precision={0} iconColor="green" icon={<Gauge className="h-5 w-5" />} />
+        <MetricCard label="Soil moisture raw" value={item?.soil_moisture_raw} unit="ADC" precision={0} iconColor="green" icon={<Gauge className="h-5 w-5" />} />
         <MetricCard label="Ambient light" value={item?.ambient_light_raw} unit="ADC" precision={0} iconColor="violet" icon={<Sun className="h-5 w-5" />} />
       </div>
     </section>
@@ -116,7 +116,7 @@ export function Overview() {
           healthLabel={item.health_label}
           temperature={item.temperature_c}
           humidity={item.humidity_pct}
-          soilMoisture={item.soil_moisture_pct}
+          soilMoisture={item.soil_moisture_raw}
           ambientLight={item.ambient_light_raw}
           readingCount={plants.find((plant) => plant.plant_id === item.plant_id)?.readingCount}
           lastUpdated={item.timestamp}
@@ -173,7 +173,7 @@ export function PlantMonitoring() {
   const plantReadings = readings.filter((item) => item.plant_id === selected)
   const selectedReading = latest(plantReadings)
   const selectedCalibrated = selectedReading ? hasCalibratedReflectance(selectedReading) : false
-  const selectedNdvi = selectedCalibrated ? selectedReading?.ndvi : undefined
+  const selectedNdvi = selectedCalibrated ? selectedReading?.ndvi : getRawNDVIEstimate(selectedReading)
   const pageTimestamp = selectedReading ? new Date(selectedReading.timestamp).toLocaleString() : plants.find((plant) => plant.lastUpdated)?.lastUpdated ? new Date(plants.find((plant) => plant.lastUpdated)?.lastUpdated ?? '').toLocaleString() : 'Awaiting plant reading'
   const providerMode = getDataProvider().mode
 
@@ -230,8 +230,8 @@ export function PlantMonitoring() {
             </div>
             <div className="border-t border-surface-300 pt-5">
               <div className="grid gap-6 lg:grid-cols-2">
-                <div><p className="sensor-label">Latest optical summary</p><div className="mt-3 grid gap-3 sm:grid-cols-3"><PlantValue label="RED reflectance" value={selectedReading.red_reflectance == null ? 'Not available' : `${selectedReading.red_reflectance.toFixed(2)} %`} accent="red" /><PlantValue label="NIR reflectance" value={selectedReading.nir_reflectance == null ? 'Not available' : `${selectedReading.nir_reflectance.toFixed(2)} %`} accent="nir" /><PlantValue label="NDVI" value={selectedNdvi == null ? 'Not available' : selectedNdvi.toFixed(3)} accent="green" /></div><p className="mt-3 text-xs text-surface-500">{selectedCalibrated ? 'Calibrated reflectance available.' : 'NDVI unavailable — calibrated reflectance required.'}</p></div>
-                <div><p className="sensor-label">Latest environment summary</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><PlantValue label="Temperature" value={selectedReading.temperature_c == null ? 'Not available' : `${selectedReading.temperature_c.toFixed(1)} °C`} /><PlantValue label="Humidity" value={selectedReading.humidity_pct == null ? 'Not available' : `${selectedReading.humidity_pct.toFixed(0)} %`} /><PlantValue label="Soil moisture" value={selectedReading.soil_moisture_pct == null ? 'Not available' : `${selectedReading.soil_moisture_pct.toFixed(0)} %`} /><PlantValue label="Ambient light" value={selectedReading.ambient_light_raw == null ? 'Not available' : `${selectedReading.ambient_light_raw.toFixed(0)} ADC`} /></div></div>
+                <div><p className="sensor-label">Latest optical summary</p><div className="mt-3 grid gap-3 sm:grid-cols-3"><PlantValue label="RED raw" value={selectedReading.red_raw == null ? 'Not available' : `${selectedReading.red_raw.toFixed(0)} ADC`} accent="red" /><PlantValue label="NIR raw" value={selectedReading.nir_raw == null ? 'Not available' : `${selectedReading.nir_raw.toFixed(0)} ADC`} accent="nir" /><PlantValue label={selectedCalibrated ? 'NDVI' : 'Raw NDVI Estimate'} value={selectedNdvi == null ? 'Not available' : selectedNdvi.toFixed(3)} accent="green" /></div><p className="mt-3 text-xs text-surface-500">{selectedCalibrated ? 'Calibrated reflectance available.' : 'Raw estimate only; calibrated NDVI requires reflectance.'}</p></div>
+                <div><p className="sensor-label">Latest environment summary</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><PlantValue label="Temperature" value={selectedReading.temperature_c == null ? 'Not available' : `${selectedReading.temperature_c.toFixed(1)} °C`} /><PlantValue label="Humidity" value={selectedReading.humidity_pct == null ? 'Not available' : `${selectedReading.humidity_pct.toFixed(0)} %`} /><PlantValue label="Soil moisture raw" value={selectedReading.soil_moisture_raw == null ? 'Not available' : `${selectedReading.soil_moisture_raw.toFixed(0)} ADC`} /><PlantValue label="Ambient light raw" value={selectedReading.ambient_light_raw == null ? 'Not available' : `${selectedReading.ambient_light_raw.toFixed(0)} ADC`} /></div></div>
               </div>
             </div>
           </div> : <Empty text="No readings available for this plant." />}
@@ -249,7 +249,7 @@ export function OpticalSensing() {
   const { data: readings = [], isLoading, error } = useReadings()
   const item = latest(readings)
   const calibrated = item ? hasCalibratedReflectance(item) : false
-  const ndvi = calibrated ? item?.ndvi : undefined
+  const ndvi = calibrated ? item?.ndvi : getRawNDVIEstimate(item)
   const redReflectance = item?.red_reflectance
   const nirReflectance = item?.nir_reflectance
   const latestTimestamp = item ? new Date(item.timestamp).toLocaleString() : 'Awaiting optical reading'
@@ -326,14 +326,14 @@ export function OpticalSensing() {
       </Card>
 
       <Card variant="raised">
-        <CardHeader><div className="flex items-center justify-between"><div><p className="sensor-label">Derived signal</p><h2 className="mt-1 text-lg font-semibold text-surface-950">NDVI</h2></div><Leaf className="h-5 w-5 text-vikasa-400" aria-hidden="true" /></div></CardHeader>
+        <CardHeader><div className="flex items-center justify-between"><div><p className="sensor-label">Derived signal</p><h2 className="mt-1 text-lg font-semibold text-surface-950">{calibrated ? 'NDVI' : 'Raw NDVI Estimate'}</h2></div><Leaf className="h-5 w-5 text-vikasa-400" aria-hidden="true" /></div></CardHeader>
         <CardBody>
           <div className="rounded-xl border border-vikasa-500/25 bg-vikasa-950/20 p-5">
             <p className="font-mono text-4xl font-semibold text-surface-950">{ndvi == null ? '—' : ndvi.toFixed(3)}</p>
-            <p className="mt-2 text-sm text-vikasa-300">{calibrated ? 'Calibrated reflectance available' : 'NDVI unavailable — calibrated reflectance required'}</p>
+            <p className="mt-2 text-sm text-vikasa-300">{calibrated ? 'Calibrated reflectance available' : 'Estimated from raw RED + NIR ADC counts'}</p>
           </div>
           <div className="mt-5 flex items-center justify-between border-b border-surface-300 pb-3"><span className="text-sm text-surface-500">Calibration state</span><Badge variant={calibrated ? 'success' : 'warning'}>{calibrated ? 'Calibrated' : item ? 'Calibration required' : 'Unknown'}</Badge></div>
-          <p className="mt-4 text-xs leading-5 text-surface-500">NDVI is shown only when both RED and NIR calibrated reflectance values exist in the selected reading.</p>
+          <p className="mt-4 text-xs leading-5 text-surface-500">{calibrated ? 'NDVI is shown from calibrated RED and NIR reflectance values.' : 'This is not calibrated NDVI and should not be treated as a definitive plant-health measurement.'}</p>
         </CardBody>
       </Card>
     </section>
@@ -433,7 +433,7 @@ export function Environment() {
   const latestTimestamp = item ? new Date(item.timestamp).toLocaleString() : 'Awaiting environmental reading'
   const temperatureTrend = environmentalTrend(readings, 'temperature_c')
   const humidityTrend = environmentalTrend(readings, 'humidity_pct')
-  const moistureTrend = environmentalTrend(readings, 'soil_moisture_pct')
+  const moistureTrend = environmentalTrend(readings, 'soil_moisture_raw')
 
   if (isLoading) return <Loading title="Loading environment" />
   if (error) return <ErrorState />
@@ -461,7 +461,7 @@ export function Environment() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Temperature" value={item?.temperature_c} unit="°C" trend={temperatureTrend} iconColor="amber" icon={<Thermometer className="h-5 w-5" />} />
         <MetricCard label="Humidity" value={item?.humidity_pct} unit="%" trend={humidityTrend} iconColor="blue" icon={<Droplets className="h-5 w-5" />} />
-        <MetricCard label="Soil moisture" value={item?.soil_moisture_pct} unit="%" trend={moistureTrend} iconColor="green" icon={<Gauge className="h-5 w-5" />} />
+        <MetricCard label="Soil moisture raw" value={item?.soil_moisture_raw} unit="ADC" trend={moistureTrend} iconColor="green" icon={<Gauge className="h-5 w-5" />} />
         <MetricCard label="Ambient light" value={item?.ambient_light_raw} unit="ADC" iconColor="violet" icon={<Sun className="h-5 w-5" />} />
       </div>
     </section>
@@ -476,7 +476,7 @@ export function Environment() {
           {item ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <ConditionValue label="Temperature" value={item.temperature_c} unit="°C" icon={<Thermometer className="h-4 w-4 text-amber-400" />} />
             <ConditionValue label="Humidity" value={item.humidity_pct} unit="%" icon={<Droplets className="h-4 w-4 text-blue-400" />} />
-            <ConditionValue label="Soil moisture" value={item.soil_moisture_pct} unit="%" icon={<Leaf className="h-4 w-4 text-vikasa-400" />} />
+            <ConditionValue label="Soil moisture raw" value={item.soil_moisture_raw} unit="ADC" icon={<Leaf className="h-4 w-4 text-vikasa-400" />} />
             <ConditionValue label="Ambient light" value={item.ambient_light_raw} unit="ADC" icon={<Sun className="h-4 w-4 text-optical-nir-400" />} />
           </div> : <Empty text="No sensor readings available yet." />}
           {item && <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-surface-300 pt-4 text-xs text-surface-500"><span>Reading ID: <strong className="font-mono font-normal text-surface-950">{item.reading_id}</strong></span><span>Session: <strong className="font-mono font-normal text-surface-950">{item.session_id}</strong></span><span>{latestTimestamp}</span></div>}
@@ -499,7 +499,7 @@ export function Environment() {
       <CardBody className="grid gap-3 md:grid-cols-3">
         <EnvironmentalTrend readings={readings} field="temperature_c" label="Temperature" unit="°C" color="#fbbf24" />
         <EnvironmentalTrend readings={readings} field="humidity_pct" label="Humidity" unit="%" color="#60a5fa" />
-        <EnvironmentalTrend readings={readings} field="soil_moisture_pct" label="Soil moisture" unit="%" color="#34d399" />
+        <EnvironmentalTrend readings={readings} field="soil_moisture_raw" label="Soil moisture raw" unit="ADC" color="#34d399" />
       </CardBody>
     </Card>
   </div>
@@ -699,7 +699,7 @@ export function SystemStatusPage() {
   </div>
 }
 export { SystemStatusPage as SystemStatus }
-function environmentalTrend(readings: SensorReadingWithMeta[], field: 'temperature_c' | 'humidity_pct' | 'soil_moisture_pct') {
+function environmentalTrend(readings: SensorReadingWithMeta[], field: 'temperature_c' | 'humidity_pct' | 'soil_moisture_pct' | 'soil_moisture_raw') {
   return readings
     .filter((reading) => typeof reading[field] === 'number')
     .slice()
@@ -712,7 +712,7 @@ function ConditionValue({ label, value, unit, icon }: { label: string; value?: n
     <p className="mt-4 font-mono text-xl font-semibold text-surface-950">{value == null ? 'Not available' : `${value.toFixed(unit === '°C' ? 1 : 0)} ${unit}`}</p>
   </div>
 }
-function EnvironmentalTrend({ readings, field, label, unit, color }: { readings: SensorReadingWithMeta[]; field: 'temperature_c' | 'humidity_pct' | 'soil_moisture_pct'; label: string; unit: string; color: string }) {
+function EnvironmentalTrend({ readings, field, label, unit, color }: { readings: SensorReadingWithMeta[]; field: 'temperature_c' | 'humidity_pct' | 'soil_moisture_pct' | 'soil_moisture_raw'; label: string; unit: string; color: string }) {
   const points = environmentalTrend(readings, field)
   const max = Math.max(...points, 1)
   const min = Math.min(...points, 0)
@@ -775,4 +775,4 @@ function AlertRow({ alert, expanded = false }: { alert: AlertItem; expanded?: bo
     </div>
   </div>
 }
-function ReadingTable({ readings, optical = false }: { readings: SensorReadingWithMeta[]; optical?: boolean }) { if (!readings.length) return <Empty text="No readings available." />; return <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead><tr className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500"><th className="px-3 py-3">Time</th><th className="px-3 py-3">Plant</th><th className="px-3 py-3">Health</th><th className="px-3 py-3">Temperature</th><th className="px-3 py-3">Humidity</th>{optical && <><th className="px-3 py-3">Red ADC</th><th className="px-3 py-3">NIR ADC</th><th className="px-3 py-3">NDVI</th></>}</tr></thead><tbody>{readings.map((item) => <tr key={item.reading_id} className="border-b border-slate-100"><td className="whitespace-nowrap px-3 py-3 text-slate-600">{new Date(item.timestamp).toLocaleString()}</td><td className="px-3 py-3 font-medium">{item.plant_id}</td><td className="px-3 py-3">{statusBadge(item.health_label)}</td><td className="px-3 py-3">{displayValue(item.temperature_c, '°C')}</td><td className="px-3 py-3">{displayValue(item.humidity_pct, '%')}</td>{optical && <><td className="px-3 py-3 font-mono">{displayValue(item.red_raw)}</td><td className="px-3 py-3 font-mono">{displayValue(item.nir_raw)}</td><td className="px-3 py-3 font-mono">{hasCalibratedReflectance(item) ? displayValue(item.ndvi) : 'Not available'}</td></>}</tr>)}</tbody></table></div> }
+function ReadingTable({ readings, optical = false }: { readings: SensorReadingWithMeta[]; optical?: boolean }) { if (!readings.length) return <Empty text="No readings available." />; return <div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead><tr className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500"><th className="px-3 py-3">Time</th><th className="px-3 py-3">Plant</th><th className="px-3 py-3">Health</th><th className="px-3 py-3">Temperature</th><th className="px-3 py-3">Humidity</th>{optical && <><th className="px-3 py-3">Red ADC</th><th className="px-3 py-3">NIR ADC</th><th className="px-3 py-3">Raw NDVI Estimate</th></>}</tr></thead><tbody>{readings.map((item) => <tr key={item.reading_id} className="border-b border-slate-100"><td className="whitespace-nowrap px-3 py-3 text-slate-600">{new Date(item.timestamp).toLocaleString()}</td><td className="px-3 py-3 font-medium">{item.plant_id}</td><td className="px-3 py-3">{statusBadge(item.health_label)}</td><td className="px-3 py-3">{displayValue(item.temperature_c, '°C')}</td><td className="px-3 py-3">{displayValue(item.humidity_pct, '%')}</td>{optical && <><td className="px-3 py-3 font-mono">{displayValue(item.red_raw)}</td><td className="px-3 py-3 font-mono">{displayValue(item.nir_raw)}</td><td className="px-3 py-3 font-mono">{displayValue(hasCalibratedReflectance(item) ? item.ndvi : getRawNDVIEstimate(item))}</td></>}</tr>)}</tbody></table></div> }

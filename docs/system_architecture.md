@@ -1,94 +1,104 @@
 # System Architecture
 
-This document describes the proposed Vikāsa architecture and the intended responsibilities of each subsystem. It is a planning document, not a validated implementation record.
+This document describes the **implemented** Vikāsa architecture and the responsibilities of each subsystem.
 
 ## System overview
 
-Vikāsa is intended to monitor plant stress through non-invasive optical measurements. The design connects a sensing node, edge firmware, data processing, cloud storage, and user-facing interfaces.
+Vikāsa monitors plant stress through non-invasive optical measurements. The implemented pipeline connects an ESP32-C3 sensing node, a Flask REST API, Supabase/Firebase storage, and a React dashboard.
 
-## Proposed component roles
+## Component roles
 
-### 1. Sensing hardware
-- Red and NIR reflectance sensors collect optical information related to plant surface response.
-- Environmental sensors record surrounding conditions such as light, temperature, and humidity.
-- The hardware layout and circuit details remain pending validation.
+### 1. ESP32-C3 edge node (firmware in `hardware/firmware/`)
+- Reads optical sensors via ADS1115 (red/NIR channels, dark/reference/sample sequence)
+- Reads environmental sensors (DHT22 temperature/humidity, soil moisture ADC, ambient light ADC)
+- Performs dark correction and reference calibration to compute reflectance percentages
+- Generates deterministic reading IDs: `VIKASA-{PLANT_ID}-{TIMESTAMP_MS}-{SEQUENCE}`
+- Synchronizes time via NTP with explicit `UNSYNCED` state when time is not plausible
+- POSTs validated JSON payloads to `POST /api/sensor-data` with retry logic (bounded retries, no uncontrolled loops)
+- **Does NOT** infer health labels, stress types, or classifications
 
-### 2. ESP32 edge node
-- The ESP32 is planned as the local acquisition and control unit.
-- Firmware is expected to collect sensor readings, apply basic filtering, and transmit structured data to the backend.
-- Clock synchronization, message formatting, and power handling are still design decisions.
+### 2. Flask REST API (backend in `backend/`)
+- Validates incoming sensor data against 24-field Pydantic schema (`backend/app/schemas/sensor.py`)
+- Computes `raw_ndvi_estimate` from raw ADC counts as a computed field (not stored)
+- Enforces: NDVI requires both calibrated reflectance values; pairwise reflectance requirement
+- Rejects timestamps older than 1 year or in the future (>5 min)
+- Storage abstraction: in-memory (dev), Supabase (production), Firebase (legacy)
+- Exposes REST endpoints: readings CRUD, plant summaries, system status, alerts
+- Duplicate detection on `reading_id` (returns 409)
+- Honest system status: reports `esp32: "unknown"`, `firebase: "unknown"`
 
-### 3. Data acquisition and local storage
-- Raw measurements are intended to be organized under `data/raw/` before validation.
-- Temporary staging and metadata capture are planned in the data pipeline.
-- Full data handling rules must be finalized before deployment.
+### 3. Supabase/Firebase storage
+- **Supabase** (default production): PostgreSQL with row-level security, async client
+- **Firebase** (legacy): Realtime Database with idempotent transaction writes
+- **In-memory** (default dev): Non-persistent, cleared on restart
+- All backends implement `StorageService` interface for swapability
 
-### 4. ML processing pipeline
-- `ml/` is organized for validation, preprocessing, feature extraction, training, evaluation, and export.
-- The team intends to use a small, efficient ML workflow suitable for embedded or edge-oriented inference.
-- Model architecture, target outputs, and thresholding approach remain open pending experiments.
+### 4. React/TypeScript dashboard (frontend in `frontend/`)
+- Polls `/api/readings` every **10 seconds** via TanStack Query (`refetchInterval: 10_000`)
+- Data provider pattern: demo ↔ Flask API (switched via `VITE_API_BASE_URL`)
+- Displays raw ADC, calibrated reflectance, raw NDVI estimate, and environmental trends
+- Clear labeling: "Raw NDVI Estimate" vs "NDVI", "Soil moisture raw ADC" vs calibrated %
+- Empty states show "Not available" — never zero
+- CSV inspector for browser-local file validation (provenance warnings)
 
-### 5. Flask backend
-- The backend is proposed as the central API service.
-- It will validate incoming data, store observations, and coordinate integrations.
-- This layer is also the likely point for alert logic and health summaries.
-
-### 6. Firebase Realtime Database
-- Firebase is proposed as a shared, near-real-time persistence layer.
-- It may serve as a communication bridge between hardware data, backend processing, and dashboard consumers.
-- The schema and replication policy are pending specification.
-
-### 7. Dashboard and alerts
-- The dashboard is intended to visualize plant health trends, sensor history, and alert events.
-- Telegram alerts are planned for operational messages and threshold-triggered notifications.
-- Exact alert thresholds and user workflows remain undecided.
-
-## Proposed data flow
+## Implemented data flow
 
 ```text
-Plant canopy / field environment
-    -> Sensor acquisition (reflectance + environmental)
-    -> ESP32 firmware collection and packaging
-    -> Raw data staging
-    -> Validation and preprocessing
-    -> Feature engineering
-    -> TinyML inference or scoring
-    -> Flask API ingestion
-    -> Firebase persistence
-    -> Dashboard and Telegram alerts
+Plant canopy
+    → ESP32-C3: ADS1115 (red/NIR raw, dark, reference) + DHT22 + soil moisture + ambient light
+    → Firmware: dark correction → reflectance calibration → deterministic reading_id → NTP timestamp
+    → HTTP POST /api/sensor-data (JSON, retry on 5xx/timeout, single retry on 409)
+    → Flask API: Pydantic validation → raw_ndvi_estimate computed → storage backend
+    → Supabase/Firebase/memory: persistent or ephemeral storage
+    → React dashboard: 10s polling → TanStack Query → UI components
 ```
 
-## Architectural assumptions
+## Key architectural decisions
 
-The following assumptions are part of the current proposal:
+| Decision | Implementation |
+|----------|----------------|
+| Raw vs calibrated | Stored separately; `raw_ndvi_estimate` computed from ADC, never conflated with calibrated `ndvi` |
+| Timestamp handling | Explicit `UNSYNCED` state; backend rejects implausible timestamps |
+| Reading ID | Deterministic, device-generated; enables duplicate detection |
+| Storage abstraction | Interface-based; swap memory/Supabase/Firebase via config |
+| Polling interval | 10 seconds (frontend), configurable via `refetchInterval` |
+| API base URL | Frontend: `http://127.0.0.1:5000` (no `/api`); Firmware: `http://127.0.0.1:5000/api` |
+| Secrets | Never committed; `secrets.h` (firmware), `.env` (backend) gitignored |
 
-- The sensing system should remain non-invasive.
-- The device must support low-power or intermittent operation in field conditions.
-- Data should be structured enough to support later training and analysis.
-- Model and alert policies should be configurable as the system matures.
+## Verified implementation status
 
-## Unverified design details
+| Component | Status | Notes |
+|-----------|--------|-------|
+| ESP32 firmware | ✅ Compiles | `pio run -e glyph_c3` and `glyph_c3-dev` succeed |
+| Flask API | ✅ Tests pass | 57/57 tests pass with `STORAGE_BACKEND=memory` |
+| Supabase storage | ✅ Tests pass | Unit tests mock client; integration requires credentials |
+| Firebase storage | ✅ Tests pass | Unit tests mock firebase_admin |
+| React dashboard | ✅ Build passes | `npm run build` and `npm run lint` pass |
+| Dashboard polling | ✅ Verified | 10s interval confirmed in browser Network tab |
+| Raw NDVI estimate | ✅ Implemented | Backend computed field, frontend displays when calibrated unavailable |
 
-The following items are intentionally left unverified in this documentation:
+## Unverified / future work
 
-- Exact reflectance sensor placement and optical geometry
-- Specific circuit topology for analog signal conditioning
-- Final ADC configuration and noise mitigation strategy
-- Power supply stability and enclosure constraints
-- Whether inference is performed on-device, server-side, or in both places
-- Final model design and stress labels
-- Communication protocol and security treatment for backend connectivity
+The following items remain unverified or unimplemented:
 
-These items require technical review and empirical validation before being treated as final requirements.
+- **Hardware calibration**: Physical ADS1115 + transimpedance amplifier circuit, LED driver, reference standard (Spectralon), reflectance linearity not yet validated
+- **Optical measurement accuracy**: Dark current stability, temperature compensation, long-term drift not characterized
+- **ML inference**: No TinyML model deployed on ESP32 or server-side; `ml/` directory contains pipeline scaffolding only
+- **Alert generation**: `/api/alerts` returns empty with `generated: false`; Telegram integration not connected
+- **Authentication**: No auth on API endpoints; development only
+- **ESP32 connectivity**: Not verified in CI; `/api/system/status` honestly reports `unknown`
+- **Production Supabase/Firebase**: Requires valid credentials and schema migration
 
 ## Development outlook
 
-1. Hardware concept definition
-2. Sensor and circuit review
-3. Firmware prototyping
-4. Data acquisition protocol definition
-5. ML pipeline design and experimentation
-6. Backend integration and storage plans
-7. Dashboard, alerting, and operational rollout
+1. **Hardware validation** — Complete analog front-end, reference standard, calibration procedure
+2. **Optical characterization** — Linearity, temperature compensation, drift, accuracy vs known samples
+3. **ML pipeline** — Label collection, preprocessing, feature engineering, model training, export
+4. **Edge inference** — Deploy TinyML model to ESP32-C3 (if feasible) or server-side scoring
+5. **Alerting** — Threshold configuration, Telegram integration, alert persistence
+6. **Authentication** — API keys, JWT, or mTLS for production
+7. **Observability** — Structured logging, metrics, distributed tracing
 
-This schedule reflects the intended sequence but does not imply that the hardware or ML pipeline has been tested.
+## Notes
+
+This architecture reflects the **currently working implementation**. The hardware calibration, ML inference, and alerting are documented future work. Any circuit details, sensor choices, or model claims should be treated as preliminary until formally validated.

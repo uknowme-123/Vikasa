@@ -4,6 +4,7 @@
 
 #include "timestamp.h"
 #include <WiFi.h>
+#include <esp_sntp.h>
 #include <time.h>
 #include <string.h>
 #include <stdio.h>
@@ -37,10 +38,38 @@ bool timestamp_sync_ntp(TimestampManager* tm) {
     }
     
     uint32_t now_ms = millis();
+    time_t current_unix = time(nullptr);
+    sntp_sync_status_t sync_status = sntp_get_sync_status();
+
+    if (sync_status == SNTP_SYNC_STATUS_COMPLETED &&
+        timestamp_unix_is_plausible(current_unix)) {
+        tm->ntp_time_offset = current_unix - (now_ms / 1000);
+        tm->last_sync_ms = now_ms;
+        tm->sync_state = TIMESTAMP_SYNCED;
+        tm->sync_attempts = 0;
+
+#if DEVELOPMENT_MODE
+        Serial.printf("[TIMESTAMP] SNTP sync complete. Unix time: %lu\n",
+                      (unsigned long)current_unix);
+#elif defined(VIKASA_SERIAL_DIAGNOSTICS)
+        Serial.printf("[TIMESTAMP] SNTP sync complete. Unix time: %lu\n",
+                      (unsigned long)current_unix);
+#endif
+        return true;
+    }
+
+    if (tm->sync_state == TIMESTAMP_SYNCED &&
+        timestamp_unix_is_plausible(current_unix)) {
+        return true;
+    }
+
+    if (tm->sync_state == TIMESTAMP_SYNCED) {
+        tm->sync_state = TIMESTAMP_SYNC_FAILED;
+    }
     
     // Rate limit sync attempts
     if (now_ms - tm->last_sync_attempt_ms < 5000) {  // Min 5 seconds between attempts
-        return tm->sync_state == TIMESTAMP_SYNCED;
+        return false;
     }
     
     tm->last_sync_attempt_ms = now_ms;
@@ -51,34 +80,16 @@ bool timestamp_sync_ntp(TimestampManager* tm) {
     Serial.printf("[TIMESTAMP] Attempting NTP sync (attempt %d)...\n", tm->sync_attempts);
 #endif
     
-    struct timeval tv;
-    if (gettimeofday(&tv, nullptr) == 0) {
-        // Successfully got time from NTP
-        time_t ntp_time = tv.tv_sec;
-        time_t local_time = time(nullptr);
-        
-        // Calculate offset between millis() and NTP time
-        // millis() is milliseconds since boot
-        // ntp_time is seconds since epoch
-        tm->ntp_time_offset = ntp_time - (now_ms / 1000);
-        tm->last_sync_ms = now_ms;
-        tm->sync_state = TIMESTAMP_SYNCED;
-        
-#if DEVELOPMENT_MODE
-        Serial.printf("[TIMESTAMP] NTP sync successful. Unix time: %lu, Offset: %ld\n", 
-                      (unsigned long)ntp_time, tm->ntp_time_offset);
-#elif defined(VIKASA_SERIAL_DIAGNOSTICS)
-        Serial.printf("[TIMESTAMP] System time read; Unix time: %lu (SNTP completion not independently verified)\n",
-                      (unsigned long)ntp_time);
-#endif
-        return true;
-    } else {
-        tm->sync_state = TIMESTAMP_SYNC_FAILED;
+    tm->sync_state = TIMESTAMP_SYNCING;
 #if DEVELOPMENT_MODE || defined(VIKASA_SERIAL_DIAGNOSTICS)
-        Serial.println("[TIMESTAMP] NTP sync failed");
-#endif
-        return false;
+    if (!timestamp_unix_is_plausible(current_unix)) {
+        Serial.printf("[TIMESTAMP] Waiting for SNTP; system time is not plausible yet (Unix time: %lu)\n",
+                      (unsigned long)current_unix);
+    } else {
+        Serial.println("[TIMESTAMP] Waiting for SNTP completion");
     }
+#endif
+    return false;
 }
 
 // Get current ISO 8601 timestamp string
@@ -99,6 +110,12 @@ void timestamp_get_iso8601(const TimestampManager* tm, char* buffer, size_t buff
     // Calculate current Unix time using millis() + offset
     uint32_t now_ms = millis();
     time_t current_unix = tm->ntp_time_offset + (now_ms / 1000);
+    if (!timestamp_unix_is_plausible(current_unix)) {
+        strncpy(buffer, TIMESTAMP_UNSYNCED_INDICATOR, buffer_size - 1);
+        buffer[buffer_size - 1] = '\0';
+        if (synced) *synced = false;
+        return;
+    }
     
     // Convert to UTC time struct
     struct tm timeinfo;
@@ -131,11 +148,18 @@ time_t timestamp_get_unix(const TimestampManager* tm) {
     }
     
     uint32_t now_ms = millis();
-    return tm->ntp_time_offset + (now_ms / 1000);
+    time_t current_unix = tm->ntp_time_offset + (now_ms / 1000);
+    return timestamp_unix_is_plausible(current_unix) ? current_unix : 0;
 }
 
 bool timestamp_is_synced(const TimestampManager* tm) {
-    return tm && tm->sync_state == TIMESTAMP_SYNCED;
+    if (!tm || tm->sync_state != TIMESTAMP_SYNCED) {
+        return false;
+    }
+
+    uint32_t now_ms = millis();
+    time_t current_unix = tm->ntp_time_offset + (now_ms / 1000);
+    return timestamp_unix_is_plausible(current_unix);
 }
 
 const char* timestamp_sync_state_str(TimestampSyncState state) {

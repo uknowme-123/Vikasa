@@ -64,7 +64,7 @@ export const PlantStatusCard = forwardRef<HTMLDivElement, PlantStatusCardProps>(
     calibrated = false,
     ...props
   }, ref) => {
-    const healthStatus = getHealthStatus(healthLabel, ndvi)
+    const healthStatus = getHealthStatus(healthLabel, calibrated ? ndvi : undefined)
     const config = healthConfig[healthStatus]
 
     return (
@@ -102,7 +102,7 @@ export const PlantStatusCard = forwardRef<HTMLDivElement, PlantStatusCardProps>(
 
               <div className="grid grid-cols-2 gap-3">
                 <MetricItem
-                  label="NDVI"
+                  label={calibrated ? 'NDVI' : 'Raw NDVI Estimate'}
                   value={formatValue(ndvi, 'NDVI', 3)}
                   icon={<Leaf className="h-4 w-4 text-vikasa-400" />}
                   accent="vikasa"
@@ -140,7 +140,7 @@ export const PlantStatusCard = forwardRef<HTMLDivElement, PlantStatusCardProps>(
               <div className="mt-8">
                 <p className="sensor-value-lg font-mono text-surface-950">{ndvi == null ? '—' : ndvi.toFixed(3)}</p>
                 <p className="mt-1 text-xs leading-5 text-surface-700">
-                  {calibrated ? 'Validated reflectance input' : 'Calibrated reflectance unavailable'}
+                  {calibrated ? 'Validated reflectance input' : 'Raw estimate only'}
                 </p>
               </div>
             </div>
@@ -164,8 +164,8 @@ export const PlantStatusCard = forwardRef<HTMLDivElement, PlantStatusCardProps>(
                 available={humidity != null}
               />
               <MetricItem
-                label="Soil Moisture"
-                value={formatValue(soilMoisture, '%', 0)}
+                label="Soil Moisture Raw"
+                value={formatValue(soilMoisture, 'ADC', 0)}
                 icon={<Gauge className="h-4 w-4 text-vikasa-400" />}
                 accent="vikasa"
                 available={soilMoisture != null}

@@ -25,7 +25,7 @@ export const OpticalAnalysisCard = forwardRef<HTMLDivElement, OpticalAnalysisCar
           <div className="flex items-center justify-between">
             <div>
               <p className="sensor-label text-optical-nir-400">OPTICAL ANALYSIS</p>
-              <h2 className="mt-1 text-lg font-semibold text-surface-950">RED + NIR → Reflectance → NDVI</h2>
+              <h2 className="mt-1 text-lg font-semibold text-surface-950">RED + NIR signal</h2>
             </div>
             <Badge variant={calibrated ? 'success' : 'warning'}>
               {calibrated ? 'Calibrated path available' : 'Calibration required'}
@@ -77,18 +77,18 @@ export const OpticalAnalysisCard = forwardRef<HTMLDivElement, OpticalAnalysisCar
 
             <div className="rounded-2xl border border-vikasa-500/25 bg-vikasa-950/20 p-5">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-vikasa-300">NDVI</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-vikasa-300">{calibrated ? 'NDVI' : 'RAW NDVI ESTIMATE'}</span>
                 <Aperture className="h-4 w-4 text-vikasa-400" aria-hidden="true" />
               </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-surface-500">Plant Signal</span>
-                  <span className={`font-mono text-lg font-semibold ${hasReflectance ? 'text-vikasa-400' : 'text-surface-500'}`}>
+                  <span className={`font-mono text-lg font-semibold ${ndvi != null ? 'text-vikasa-400' : 'text-surface-500'}`}>
                     {formatValue(ndvi, 'NDVI', 3)}
                   </span>
                 </div>
               </div>
-              <p className="mt-3 text-xs text-surface-500">Displayed only from calibrated reflectance</p>
+              <p className="mt-3 text-xs text-surface-500">{calibrated ? 'Displayed from calibrated reflectance' : 'Estimated from raw ADC counts'}</p>
             </div>
           </div>
 
@@ -127,7 +127,7 @@ export const OpticalAnalysisCard = forwardRef<HTMLDivElement, OpticalAnalysisCar
 
           {!hasReflectance && (
             <div className="rounded-xl border border-surface-300 bg-surface-0/50 p-4 text-xs leading-5 text-surface-500 text-center">
-              RAW SIGNAL → calibration → reflectance → NDVI. Raw ADC counts are not reflectance and are never used directly for NDVI.
+              Raw ADC counts are not reflectance. The raw NDVI estimate is useful for debugging signal direction, not definitive plant health.
             </div>
           )}
         </div>
