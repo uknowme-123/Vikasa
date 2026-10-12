@@ -7,7 +7,7 @@ name = "vikasa"
 version = "0.1.0"
 description = "Vikāsa Plant Stress Monitoring System"
 authors = [{name = "Team Nexovate", email = "nexovate@bit.edu"}]
-license = {text = "Proprietary"}
+license = {text = "MIT"}
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

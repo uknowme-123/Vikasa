@@ -287,4 +287,4 @@ Modern browsers (last 2 versions):
 
 ## License
 
-Internal use only — Team Nexovate, Bangalore Institute of Technology
+This project is distributed under the MIT License. See the root [LICENSE](../LICENSE) file for details.
