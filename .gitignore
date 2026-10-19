@@ -58,6 +58,9 @@ hardware/firmware/config/secrets.h
 hardware/firmware/.pio/
 hardware/firmware/build/
 
+# Credential-containing prototype sketch (root-level, not the sanitized example)
+/Arduino_sketch.ino
+
 # Local agent worktrees and generated package metadata
 .kilo/
 *.egg-info/
