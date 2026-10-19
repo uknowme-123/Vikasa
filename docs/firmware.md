@@ -513,17 +513,17 @@ float lux_per_adc;  // Calibration factor
 ## Build & Test Commands
 
 ```bash
-# Build for ESP32 (release)
-pio run -e esp32dev
+# Build for ESP32-C3 GLYPH C3 (release)
+pio run -e glyph_c3
 
-# Build for ESP32 (development mode)
-pio run -e esp32dev-dev
+# Build for ESP32-C3 GLYPH C3 (development mode, DEVELOPMENT_MODE=1)
+pio run -e glyph_c3-dev
 
 # Run unit tests (native)
 pio test -e native-test
 
 # Monitor serial output
-pio device monitor -e esp32dev
+pio device monitor -e glyph_c3
 ```
 
 ---

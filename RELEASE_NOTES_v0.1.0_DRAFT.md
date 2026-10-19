@@ -185,12 +185,12 @@ This project is distributed under the **MIT License** (see `LICENSE`).
 | `pyproject.toml` | `license = {text = "MIT"}` | ✅ Consistent |
 | `frontend/README.md` | "This project is distributed under the MIT License. See the root [LICENSE](../LICENSE) file for details." | ✅ Consistent |
 | `backend/README.md` | No explicit license text; references storage abstraction | ✅ Consistent (no conflict) |
-| `docs/frontend.md` | "This project is distributed under the MIT License. See the root [LICENSE](../LICENSE) file for details." | ✅ Consistent (fixed) |
+| `frontend/README.md` | "This project is distributed under the MIT License. See the root [LICENSE](../LICENSE) file for details." | ✅ Consistent |
 | `hardware/README.md` | No license text | ✅ No conflict |
 | `data/README.md` | No license text | ✅ No conflict |
 | `ml/README.md` | No license text | ✅ No conflict |
 
-**Action required**: License inconsistency in `docs/frontend.md` has been corrected in this draft.
+**Action required**: License inconsistency in `frontend/README.md` has been corrected in this draft.
 
 ---
 
@@ -208,8 +208,8 @@ This project is distributed under the **MIT License** (see `LICENSE`).
 | **Changelog** | Missing | Add `CHANGELOG.md` with versioned entries (Keep a Changelog format) |
 | **Code of conduct** | Missing | Add `CODE_OF_CONDUCT.md` (Contributor Covenant) for public repo |
 | **Security policy** | Missing | Add `SECURITY.md` with vulnerability reporting process |
-| **Firmware build target names** | `docs/firmware.md` §13 | Update `esp32dev`/`esp32dev-dev` → `glyph_c3`/`glyph_c3-dev` |
-| **Backend requirements location** | Root README, backend README | Clarify `requirements.txt` is at repository root |
+| **Firmware build target names** | `docs/firmware.md` §13 | ✅ Updated to `glyph_c3`/`glyph_c3-dev` |
+| **Backend requirements location** | Root README, backend README | ✅ Clarified `requirements.txt` is at repository root |
 
 ---
 
@@ -234,7 +234,7 @@ Example `.env` and `secrets.example.h` templates are provided in the repo.
 | **Supabase credential revocation independently verified** | ❌ **Not verified** | Obtain and document independent confirmation that the previously exposed credential was revoked and rotated |
 | **Institutional release approval documented** | ❌ **Not documented** | Written approval from Bangalore Institute of Technology / Team Nexovate leadership |
 | **Contributor consent for public distribution** | ❌ **Not documented** | Signed/recorded consent from all contributors |
-| **License consistency** | ✅ **Fixed** | `docs/frontend.md` updated to MIT reference |
+| **License consistency** | ✅ **Fixed** | `frontend/README.md` updated to MIT reference |
 
 ---
 

@@ -1,6 +1,6 @@
 # Firebase Realtime Database Integration
 
-This document describes the Firebase storage backend for the Vikāsa Flask API. It consolidates and supersedes `docs/firebase_setup.md`.
+This document describes the Firebase storage backend for the Vikāsa Flask API.
 
 ## Overview
 
@@ -316,35 +316,7 @@ All endpoints work identically regardless of storage backend:
 | `/api/alerts` | GET | Empty alerts (generation not implemented) |
 | `/api/health` | GET | Health check with storage status |
 
-## 11. Migration from firebase_setup.md
-
-This document consolidates and replaces `docs/firebase_setup.md`. Key additions:
-
-- Explicit operational mode definitions (development, Firebase-connected, smoke-test)
-- Complete database structure matching implementation
-- All 24 sensor schema fields documented
-- Smoke test safety guarantees
-- Security verification checklist
-- Storage abstraction architecture diagram
-- Error handling reference table
-
-## 12. Verification Checklist
-
-Before deploying with Firebase:
-
-- [ ] `STORAGE_BACKEND=firebase` set
-- [ ] `FIREBASE_PROJECT_ID` configured
-- [ ] `FIREBASE_DATABASE_URL` configured
-- [ ] `FIREBASE_CREDENTIALS_PATH` points to valid service account (or ADC available)
-- [ ] `.env` file is **not** committed (verify with `git status`)
-- [ ] Service account file is **not** in repository (verify with `git status`)
-- [ ] Database rules reviewed and deployed
-- [ ] Indexes created for `plant_id`, `session_id`, `timestamp`
-- [ ] Smoke test run successfully (`FIREBASE_SMOKE_TEST=true`)
-- [ ] All backend tests pass (`pytest backend/tests/`)
-- [ ] API endpoints verified with real Firebase backend
-
-## 13. Remaining Work
+## 11. Remaining Work
 
 - [ ] Device-side reading ID generation scheme
 - [ ] Authentication/authorization model for database rules

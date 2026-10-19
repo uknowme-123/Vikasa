@@ -1,44 +1,65 @@
 # Vikāsa
 
-Vikāsa is a plant-health monitoring system for Team Nexovate at Bangalore Institute of Technology. It combines red and near-infrared (NIR) optical sensing, a raw NDVI estimate from ADC counts, environmental sensors, an ESP32-C3 edge device, a Flask REST API, Supabase/Firebase storage, and a React/TypeScript dashboard.
-
-## System architecture
+Vikāsa is a plant-health monitoring system developed by **Team Nexovate** at **Bangalore Institute of Technology**. It implements a complete data pipeline for non-invasive optical plant stress monitoring using red and near-infrared (NIR) reflectance measurements.
 
 ```
-ESP32-C3 → Wi-Fi → Flask REST API → Supabase/Firebase PostgreSQL → React dashboard
+ESP32-C3 → Wi-Fi → Flask REST API → Supabase/Firebase PostgreSQL → React/TypeScript Dashboard
 ```
 
-**Implemented components:**
-- **ESP32-C3 firmware**: Reads optical (ADS1115) and environmental sensors, generates deterministic reading IDs, synchronizes time via NTP (with explicit UNSYNCED state), POSTs JSON to `/api/sensor-data`
-- **Flask backend**: Validates 24-field sensor schema, stores readings in memory/Supabase/Firebase, exposes REST endpoints for readings, plant summaries, system status, and alerts
-- **Supabase storage**: Persistent PostgreSQL backend with row-level security (production)
-- **React dashboard**: Polls `/api/readings` every 10 seconds, displays raw ADC, calibrated reflectance, raw NDVI estimate, and environmental trends
+## System Overview
 
-## Responsibilities
+| Component | Technology | Status |
+|-----------|------------|--------|
+| **Edge Device** | ESP32-C3 (PCB CUPID GLYPH C3) | Firmware compiles ✅ |
+| **Sensors** | ADS1115 (optical), DHT22, Soil moisture ADC, Ambient light ADC | Drivers implemented ✅ |
+| **API** | Flask + Pydantic validation | 57 tests pass ✅ |
+| **Storage** | Pluggable: In-memory (dev), Supabase (prod), Firebase (legacy) | Implemented ✅ |
+| **Dashboard** | React 18 + TypeScript + Vite + Tailwind + TanStack Query | Build passes ✅ |
+| **CI/CD** | GitHub Actions (backend, frontend, firmware) | Configured ✅ |
 
-| Component | Responsibility |
-|-----------|----------------|
-| ESP32-C3 | Sensor acquisition (ADS1115 optical, DHT22, soil moisture, ambient light), dark/reference calibration, deterministic reading IDs, NTP time sync, HTTP POST to Flask API |
-| Flask API | Request validation (Pydantic), storage abstraction (memory/Supabase/Firebase), REST endpoints, duplicate detection, timestamp validation |
-| Supabase/Firebase | Persistent storage, queries, health checks |
-| React dashboard | 10-second polling via TanStack Query, data provider pattern (demo ↔ API), raw vs calibrated distinction, trend charts, CSV inspection |
+## Key Features
 
-## Local setup and startup
+- **Optical measurement pipeline**: Dark correction → reference calibration → reflectance → NDVI (from calibrated reflectance only)
+- **Deterministic reading IDs**: `VIKASA-{PLANT_ID}-{TIMESTAMP_MS}-{SEQUENCE}` enables backend duplicate detection
+- **NTP time synchronization**: Explicit `UNSYNCED` state when time is not plausible; never fabricates timestamps
+- **HTTP/JSON client**: POSTs to `/api/sensor-data` with bounded retry logic (max 3 retries, no uncontrolled loops)
+- **Development mode**: `DEVELOPMENT_MODE=1` enables stub drivers, verbose logging, and `test_only: true` payloads
+- **Secrets management**: All credentials via `config/secrets.h` (gitignored); template at `config/secrets.example.h`
+- **Raw vs calibrated separation**: Raw ADC counts stored separately from calibrated reflectance/NDVI; `raw_ndvi_estimate` computed from ADC for debugging only
 
-### Backend
+## Hardware Components
 
+| Sensor | Interface | Pin / Channel | Notes |
+|--------|-----------|---------------|-------|
+| Red optical (660 nm) | BPW34 + AFE → ADS1115 | AIN0 | Time-multiplexed with reference |
+| NIR optical (940 nm) | BPW34 + AFE → ADS1115 | AIN1 | Time-multiplexed with reference |
+| Red dark | BPW34 + AFE → ADS1115 | AIN2 | Shared with soil moisture |
+| NIR dark | BPW34 + AFE → ADS1115 | AIN3 | Shared with ambient light |
+| DHT22 (temp/humidity) | GPIO (1-Wire) | GPIO10 | |
+| Soil moisture | ESP32 ADC / ADS1115 | GPIO2 / AIN2 | Default: ESP32 ADC |
+| Ambient light (LDR) | ESP32 ADC / ADS1115 | GPIO3 / AIN3 | Default: ESP32 ADC |
+| Red LED | GPIO | GPIO6 | Active illumination |
+| NIR LED | GPIO | GPIO7 | Active illumination |
+| I2C (ADS1115) | SDA/SCL | GPIO4 / GPIO5 | 400 kHz |
+
+**ADS1115 constraints**: Only 4 single-ended channels. Reference measurements reuse sample channels (AIN0/AIN1) at different times. Soil/ambient on ADS1115 would share dark channels — current defaults use ESP32 ADC to avoid conflicts.
+
+## Quick Start
+
+### Backend (Flask API)
 ```bash
-cd backend
+# From repository root
 pip install -r requirements.txt
+pip install -e .[dev]
+
+cd backend
 cp .env.example .env
 # Edit .env: set STORAGE_BACKEND=memory for local dev, or configure Supabase/Firebase
-python -m backend.app
+STORAGE_BACKEND=memory python -m backend.app
 ```
+API runs at `http://127.0.0.1:5000` (endpoints under `/api/`).
 
-The API runs at `http://127.0.0.1:5000`. Endpoints are under `/api/` (e.g., `/api/readings`, `/api/health`).
-
-### Frontend
-
+### Frontend (React Dashboard)
 ```bash
 cd frontend
 npm install
@@ -46,50 +67,27 @@ cp .env.example .env.local
 # Edit .env.local: VITE_API_BASE_URL=http://127.0.0.1:5000 (no /api suffix)
 npm run dev
 ```
-
-The development server runs at `http://localhost:5173`.
+Dev server at `http://localhost:5173`.
 
 ### Firmware (ESP32-C3)
-
 ```bash
 cd hardware/firmware
 cp config/secrets.example.h config/secrets.h
 # Edit config/secrets.h with Wi-Fi credentials, API base URL, device IDs
-pio run -e glyph_c3-dev  # Development build with DEVELOPMENT_MODE=1
-pio run -e glyph_c3      # Release build
-pio test -e native-test  # Unit tests (native)
+pio run -e glyph_c3-dev   # Development build (DEVELOPMENT_MODE=1)
+pio run -e glyph_c3       # Release build
+pio test -e native-test   # Unit tests (native)
 ```
 
-## API configuration
+### API Base URL Conventions
+| Component | Base URL Format | Notes |
+|-----------|-----------------|-------|
+| Frontend | `http://127.0.0.1:5000` | Data provider appends `/api` internally |
+| Firmware | `http://127.0.0.1:5000/api` | Firmware includes `/api` in configured `API_BASE_URL` |
 
-- **API base URL** (frontend): `http://127.0.0.1:5000` — the frontend appends `/api` internally
-- **API base URL** (firmware): `http://127.0.0.1:5000/api` — firmware includes `/api` in its configured `API_BASE_URL`
-- Do **not** duplicate `/api` in frontend requests; the data provider handles it
+## Sensor Data Contract
 
-### Key endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/health` | GET | Backend and storage health |
-| `/api/readings` | POST | Create sensor reading (alias: `/api/sensor-data`) |
-| `/api/readings/latest` | GET | Latest reading (optional `plant_id`) |
-| `/api/readings` | GET | Paginated history with filters |
-| `/api/plants/summaries` | GET | Per-plant summaries |
-| `/api/plants/<plant_id>/status` | GET | Plant status + latest reading |
-| `/api/system/status` | GET | System connectivity (honest about unverified hardware) |
-| `/api/alerts` | GET | Alert history (currently empty, `generated: false`) |
-
-## Dashboard 10-second refresh
-
-The dashboard polls `/api/readings` every **10 seconds** via `useReadings` hook (`refetchInterval: 10_000`). To verify:
-1. Start backend and frontend
-2. Open browser dev tools → Network tab
-3. Observe repeated `GET /api/readings` requests every 10s
-4. Timestamp on displayed readings advances as new data arrives
-
-## Sensor data contract
-
-The schema in `backend/app/schemas/sensor.py` is the source of truth. Key fields:
+The schema in `backend/app/schemas/sensor.py` is the source of truth (24 columns matching `data/raw/hardware/vikasa_sensor_data_template.csv`).
 
 ```json
 {
@@ -100,6 +98,10 @@ The schema in `backend/app/schemas/sensor.py` is the source of truth. Key fields
   "operator_id": "OPERATOR-001",
   "red_raw": 2100,
   "nir_raw": 3200,
+  "red_dark": 45,
+  "nir_dark": 52,
+  "red_reference": 3800,
+  "nir_reference": 3950,
   "red_reflectance": 54.2,
   "nir_reflectance": 79.8,
   "ndvi": 0.191,
@@ -107,77 +109,109 @@ The schema in `backend/app/schemas/sensor.py` is the source of truth. Key fields
   "temperature_c": 24.5,
   "humidity_pct": 62.3,
   "soil_moisture_raw": 1850,
+  "soil_moisture_pct": 42.1,
   "ambient_light_raw": 2900
 }
 ```
 
-### Raw NDVI estimate
+### Critical Rules
+- **Raw ADC ≠ Reflectance**: `red_raw`, `nir_raw` are uncalibrated ADC counts (0–65535)
+- **NDVI from calibrated reflectance only**: `ndvi` requires both `red_reflectance` and `nir_reflectance`
+- **Raw NDVI estimate**: `(nir_raw - red_raw) / (nir_raw + red_raw)` — computed field for debugging only
+- **No label inference**: Device never sets `health_label`, `stress_type`, or `label_evidence`
+- **Missing = null**: Unmeasured fields are `null`, never defaulted to 0
 
-- `raw_ndvi_estimate = (nir_raw - red_raw) / (nir_raw + red_raw)` when both raw ADC values are present
-- Computed automatically by backend schema as a **computed field** (not stored)
-- **Not calibrated NDVI** — useful for debugging signal direction only
-- Calibrated `ndvi` requires both `red_reflectance` and `nir_reflectance`
+## Key API Endpoints
 
-### Fields that may be null
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/health` | GET | Backend + storage health |
+| `/api/readings` | POST | Create reading (alias: `/api/sensor-data`) |
+| `/api/readings/latest` | GET | Latest reading (optional `plant_id`) |
+| `/api/readings` | GET | Paginated history with filters |
+| `/api/plants/summaries` | GET | Per-plant summaries |
+| `/api/plants/<plant_id>/status` | GET | Plant status + latest reading |
+| `/api/system/status` | GET | Connectivity (honest: `esp32: "unknown"`) |
+| `/api/alerts` | GET | Empty, `generated: false` |
 
-All optical, environmental, and calibration fields are optional. Missing values are `null` — never defaulted to 0. The dashboard displays "Not available" for null fields.
-
-## Build, test, and verify
+## Build & Test
 
 ### Frontend
-
 ```bash
 cd frontend
 npm run build      # TypeScript + Vite production build
-npm run lint       # ESLint (must pass with 0 errors, 0 warnings)
+npm run lint       # ESLint (0 errors, 0 warnings)
 npm run preview    # Preview production build
 ```
 
 ### Backend
-
 ```bash
 cd backend
-STORAGE_BACKEND=memory pytest backend/tests/ -v
-# All 57 tests should pass
+STORAGE_BACKEND=memory pytest backend/tests/ -v  # 57 tests pass
 ```
 
 ### Firmware
-
 ```bash
 cd hardware/firmware
-pio run -e glyph_c3      # Release build
-pio run -e glyph_c3-dev  # Development build
-# pio test -e native-test  # Requires native platform config
+pio run -e glyph_c3      # Release build (DEVELOPMENT_MODE=0)
+pio run -e glyph_c3-dev  # Development build (DEVELOPMENT_MODE=1)
+pio test -e native-test  # Unit tests (requires native platform)
 ```
 
-### Git hygiene
+## Documentation
 
-```bash
-git diff --check   # No whitespace errors
-git status         # Only intended changes staged
-```
+| Document | Description |
+|----------|-------------|
+| [docs/api.md](docs/api.md) | Complete API reference with examples |
+| [docs/firmware.md](docs/firmware.md) | ESP32-C3 firmware details (payload, IDs, timestamps, Wi-Fi, retry, optical rules) |
+| [docs/system_architecture.md](docs/system_architecture.md) | System architecture and component roles |
+| [frontend/README.md](frontend/README.md) | Dashboard architecture, data provider, pages, polling |
+| [docs/hardware_setup.md](docs/hardware_setup.md) | Preliminary hardware design notes |
+| [docs/firebase.md](docs/firebase.md) | Firebase storage backend integration |
+| [docs/data_collection_protocol.md](docs/data_collection_protocol.md) | Proposed data collection workflow and CSV schema |
+| [hardware/README.md](hardware/README.md) | Hardware directory overview |
+| [3d_Prints/README.md](3d_Prints/README.md) | 3D-printable leaf mount model |
 
-## Known limitations
+## Known Limitations
 
-- **In-memory storage** (default): Not persistent across restarts. Use `STORAGE_BACKEND=supabase` with valid credentials for persistence.
-- **No authentication**: Development only. Production requires auth.
-- **ESP32 connectivity not verified**: `/api/system/status` reports `esp32: "unknown"` honestly.
-- **Alert generation not implemented**: Returns empty list with `generated: false`.
-- **Raw NDVI estimate ≠ calibrated NDVI**: Do not use `raw_ndvi_estimate` for plant health decisions.
-- **Calibration pending**: Physical ADS1115 + AFE circuit, reference standard, and reflectance linearity not yet validated.
-- **ML pipeline not connected**: No TinyML inference or model scoring in current implementation.
+| Limitation | Details |
+|------------|---------|
+| **In-memory storage (default)** | Not persistent across restarts. Use `STORAGE_BACKEND=supabase` with valid credentials for persistence. |
+| **No authentication** | Development only. Production requires API keys, JWT, or mTLS. |
+| **ESP32 connectivity not verified** | `/api/system/status` reports `esp32: "unknown"` honestly; no CI hardware verification. |
+| **Alert generation not implemented** | `/api/alerts` returns empty list with `generated: false`. |
+| **Raw NDVI estimate ≠ calibrated NDVI** | Do not use `raw_ndvi_estimate` for plant health decisions. |
+| **Calibration pending** | Physical ADS1115 + transimpedance amplifier, LED driver, reference standard (Spectralon), and reflectance linearity not yet validated. |
+| **ML pipeline not connected** | No TinyML inference or model scoring; `ml/` directory contains scaffolding only. |
+| **Database migrations** | No migration management for Supabase schema changes. |
+| **Production Supabase/Firebase** | Requires valid credentials and schema deployment (not included in repo). |
 
-## Documentation index
+## Sensor Implementation Status
 
-- [docs/api_documentation.md](docs/api_documentation.md) — Implemented API reference
-- [docs/api.md](docs/api.md) — Detailed endpoint documentation with examples
-- [docs/frontend.md](docs/frontend.md) — Dashboard architecture and integration
-- [docs/firmware.md](docs/firmware.md) — ESP32-C3 firmware details
-- [docs/system_architecture.md](docs/system_architecture.md) — System architecture (updated to reflect implementation)
-- [docs/hardware_setup.md](docs/hardware_setup.md)
-- [docs/firebase_setup.md](docs/firebase_setup.md)
-- [docs/data_collection_protocol.md](docs/data_collection_protocol.md)
+**Physical sensor drivers are implemented in production firmware**, but physical hardware operation has not yet been verified on actual devices.
 
-## Notes
+| Sensor | Driver Status | Calibration Needed |
+|--------|---------------|-------------------|
+| ADS1115 (optical) | ✅ Implemented (I2C, gain, data rate, single-ended reads) | Transimpedance gain, reference standard |
+| DHT22 (temp/humidity) | ✅ Implemented (Adafruit DHT library) | None (factory calibrated) |
+| Soil moisture | ✅ Implemented (ESP32 ADC or ADS1115) | Dry/wet ADC points |
+| Ambient light (LDR) | ✅ Implemented (ESP32 ADC or ADS1115) | lux_per_adc factor |
+| Red/NIR optical sequence | ✅ Implemented (dark → reference → sample) | Reference standard procedure |
 
-This repository contains a **working implementation** of the data pipeline (ESP32 → Flask → Supabase → Dashboard). The hardware calibration, ML inference, and alerting remain as documented future work. Any circuit details, sensor choices, or model claims should be treated as preliminary until formally validated.
+**Outstanding calibration items:**
+- Soil moisture: `dry_raw` and `wet_raw` ADC points (currently placeholder 3000/1000)
+- Optical: Transimpedance amplifier gains, dark offsets, reference standard (Spectralon)
+- Ambient light: lux_per_adc calibration factor
+- Reference measurement procedure: Physical swap of reference standard required
+
+## License
+
+This project is distributed under the **MIT License** (see `LICENSE`).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines (to be added).
+
+---
+
+*This repository contains a working implementation of the data pipeline (ESP32 → Flask → Supabase → Dashboard). Hardware calibration, ML inference, and alerting remain as documented future work. Any circuit details, sensor choices, or model claims should be treated as preliminary until formally validated.*

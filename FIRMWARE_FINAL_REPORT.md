@@ -18,14 +18,14 @@
 
 ## 3. Firmware Build Result
 
-**ESP32 Release Build (esp32dev): SUCCESS**
+**ESP32-C3 Release Build (glyph_c3): SUCCESS**
 - Build time: 410 seconds (6 min 50 sec)
 - RAM usage: 14.4% (47,140 / 327,680 bytes)
 - Flash usage: 61.2% (802,749 / 1,310,720 bytes)
 - Output: `firmware.bin` successfully created
 - Warnings: Only from ESP-IDF framework code (anonymous structs, __FUNCTION__, _Static_assert) - no errors in project code
 
-**ESP32 Development Build (esp32dev-dev): IN PROGRESS** (compiles with DEVELOPMENT_MODE=1)
+**ESP32-C3 Development Build (glyph_c3-dev): IN PROGRESS** (compiles with DEVELOPMENT_MODE=1)
 
 ## 4. Firmware Test Result
 
